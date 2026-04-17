@@ -28,6 +28,26 @@ OLLAMA_URL = os.environ.get("SCATTER_OLLAMA_URL", "http://localhost:11434")
 MODEL = os.environ.get("SCATTER_MODEL", "qwen2.5-coder:7b")
 FAST_MODEL = os.environ.get("SCATTER_FAST_MODEL", "llama3.2:3b")
 MAX_CONTEXT = int(os.environ.get("SCATTER_CTX", "32768"))
+
+# ── Power-aware model routing ─────────────────────────────────────────────
+# Intelligence per watt: the system adapts to available energy.
+
+def _get_power_router():
+    """Import power router if available. Graceful fallback if not."""
+    try:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scatter-ops"))
+        import power_router
+        return power_router
+    except Exception:
+        return None
+
+def get_active_model():
+    """Select model based on power state. Falls back to default if router unavailable."""
+    router = _get_power_router()
+    if router:
+        selection = router.select_model()
+        return selection["model"], selection["ctx_size"], selection.get("reason", "")
+    return MODEL, MAX_CONTEXT, ""
 SESSION_DIR = os.path.expanduser(os.environ.get("SCATTER_SESSIONS", "~/.scatter/sessions"))
 MAX_TOOL_ROUNDS = 25  # safety brake: max consecutive tool-call rounds per user message
 
@@ -860,9 +880,14 @@ def interactive_loop():
     prior = load_session()
     messages = [system_msg] + prior
 
+    # Power-aware model selection
+    active_model, active_ctx, power_reason = get_active_model()
+
     print(f"\n{BOLD}{CYAN}  Scatter Code{RESET} {DIM}v0.2.0{RESET}")
-    print(c(DIM, f"  Model: {MODEL}"))
+    print(c(DIM, f"  Model: {active_model}"))
     print(c(DIM, f"  Dir:   {cwd}"))
+    if power_reason:
+        print(c(DIM, f"  Power: {power_reason}"))
     if project_ctx:
         for line in project_ctx.split("\n"):
             print(c(DIM, f"  {line}"))

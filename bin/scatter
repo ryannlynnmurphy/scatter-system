@@ -32,6 +32,10 @@ case "${1:-}" in
         shift
         exec python3 "$SCATTER_HOME/scatter-studio/server.py" "$@"
         ;;
+    ipw)
+        shift
+        exec python3 "$SCATTER_HOME/scatter-ops/power_router.py" --summary "$@"
+        ;;
     status)
         echo ""
         echo "  ┌─────────────────────────────────────┐"

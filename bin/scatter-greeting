@@ -241,6 +241,31 @@ def format_greeting(state):
     lines.append(f"  {CYAN}{sentence.strip()}{RESET}")
     lines.append("")
 
+    # Intelligence per watt — the metric that matters
+    ipw_path = os.path.expanduser("~/.scatter/ipw-log.jsonl")
+    if os.path.isfile(ipw_path):
+        try:
+            import time as _time
+            cutoff = _time.time() - 86400
+            recent_tokens = 0
+            recent_ws = 0
+            total_queries = 0
+            with open(ipw_path) as _f:
+                for _line in _f:
+                    try:
+                        _e = json.loads(_line)
+                        total_queries += 1
+                        if _e.get("timestamp", 0) > cutoff:
+                            recent_tokens += _e.get("tokens", 0)
+                            recent_ws += _e.get("watt_seconds", 0)
+                    except Exception:
+                        pass
+            if total_queries > 0:
+                wh = round(recent_ws / 3600, 2)
+                lines.append(f"  {DIM}IPW:     {recent_tokens} tokens / {wh} Wh (24h){RESET}")
+        except Exception:
+            pass
+
     # Journal stats — your research reflected back
     journal_dir = os.path.expanduser("~/.scatter/journal")
     if os.path.isdir(journal_dir):
@@ -249,7 +274,7 @@ def format_greeting(state):
             today = datetime.datetime.now().strftime("%Y%m%d")
             today_count = sum(1 for e in entries if e.stem.startswith(today))
             lines.append(f"  {DIM}Journal: {len(entries)} entries total, {today_count} today{RESET}")
-            lines.append("")
+    lines.append("")
 
     lines.append(f"  {DIM}scatter code    — local AI coding agent{RESET}")
     lines.append(f"  {DIM}scatter journal — record a decision{RESET}")
