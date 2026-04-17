@@ -1,0 +1,190 @@
+#!/usr/bin/env bash
+# ══════════════════════════════════════════════════════════════════════════════
+# Scatter — Off-grid AI computing system
+# Single entrypoint. No cloud. No phone home. Everything runs on this machine.
+# ══════════════════════════════════════════════════════════════════════════════
+set -euo pipefail
+
+SCATTER_HOME="$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)"
+export SCATTER_HOME
+
+# ── Bootstrap: ensure ~/.scatter exists ──
+mkdir -p "$HOME/.scatter/sessions" "$HOME/.scatter/incidents" "$HOME/.scatter/data/backups"
+
+case "${1:-}" in
+    code)
+        shift
+        exec python3 "$SCATTER_HOME/scatter-code/scatter_code.py" "$@"
+        ;;
+    ops)
+        shift
+        exec python3 "$SCATTER_HOME/scatter-ops/scatter_ops.py" "$@"
+        ;;
+    data)
+        shift
+        exec python3 "$SCATTER_HOME/scatter-data/scatter_data.py" "$@"
+        ;;
+    journal|j)
+        shift
+        exec python3 "$SCATTER_HOME/scatter-journal/scatter_journal.py" "$@"
+        ;;
+    studio)
+        shift
+        exec python3 "$SCATTER_HOME/scatter-studio/server.py" "$@"
+        ;;
+    status)
+        echo ""
+        echo "  ┌─────────────────────────────────────┐"
+        echo "  │  Scatter System — Status Report      │"
+        echo "  └─────────────────────────────────────┘"
+        echo ""
+        echo "  $(date '+%Y-%m-%d %H:%M:%S')"
+        echo ""
+        # Ollama
+        if curl -sf http://localhost:11434/api/tags >/dev/null 2>&1; then
+            MODELS=$(curl -sf http://localhost:11434/api/tags | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+print(', '.join(m['name'] for m in d.get('models',[])) or 'none')
+" 2>/dev/null || echo "?")
+            echo "  Ollama:        RUNNING  (models: $MODELS)"
+        else
+            echo "  Ollama:        DOWN"
+        fi
+        # Components
+        echo "  Scatter Code:  $(python3 "$SCATTER_HOME/scatter-code/scatter_code.py" --version 2>/dev/null || echo 'missing')"
+        echo "  Scatter Ops:   $(python3 "$SCATTER_HOME/scatter-ops/scatter_ops.py" --version 2>/dev/null || echo 'missing')"
+        echo "  Scatter Data:  $(python3 "$SCATTER_HOME/scatter-data/scatter_data.py" --version 2>/dev/null || echo 'missing')"
+        echo ""
+        # Quick health
+        python3 "$SCATTER_HOME/scatter-ops/scatter_ops.py" --once 2>/dev/null || true
+        echo ""
+        ;;
+    setup)
+        echo ""
+        echo "  ┌─────────────────────────────────────┐"
+        echo "  │  Scatter System — Setup Check        │"
+        echo "  └─────────────────────────────────────┘"
+        echo ""
+        PASS="  \033[32m[OK]\033[0m"
+        FAIL="  \033[31m[!!]\033[0m"
+
+        # Python
+        if command -v python3 &>/dev/null; then
+            echo -e "$PASS Python3 $(python3 --version 2>&1 | awk '{print $2}')"
+        else
+            echo -e "$FAIL Python3 not found"
+        fi
+
+        # Ollama
+        if command -v ollama &>/dev/null; then
+            echo -e "$PASS Ollama installed"
+        else
+            echo -e "$FAIL Ollama not installed"
+            echo "       Fix: curl -fsSL https://ollama.com/install.sh | sudo sh"
+        fi
+
+        # Ollama running
+        if curl -sf http://localhost:11434/api/tags >/dev/null 2>&1; then
+            echo -e "$PASS Ollama is running"
+        else
+            echo -e "$FAIL Ollama is not running"
+            echo "       Fix: ollama serve &"
+        fi
+
+        # Model
+        MODEL="${SCATTER_MODEL:-qwen2.5-coder:7b}"
+        MODEL_BASE="${MODEL%%:*}"
+        if curl -sf http://localhost:11434/api/tags 2>/dev/null | grep -q "$MODEL_BASE"; then
+            echo -e "$PASS Model '$MODEL' available"
+        else
+            echo -e "$FAIL Model '$MODEL' not pulled"
+            echo "       Fix: ollama pull $MODEL"
+        fi
+
+        # PATH
+        if echo "$PATH" | grep -q "$SCATTER_HOME/bin"; then
+            echo -e "$PASS scatter is in PATH"
+        else
+            echo -e "$FAIL scatter not in PATH"
+            echo "       Fix: echo 'export PATH=\"$SCATTER_HOME/bin:\$PATH\"' >> ~/.bashrc && source ~/.bashrc"
+        fi
+
+        # Data dirs
+        if [ -d "$HOME/.scatter" ]; then
+            echo -e "$PASS ~/.scatter directory exists"
+        else
+            echo -e "$FAIL ~/.scatter missing"
+        fi
+
+        echo ""
+        ;;
+    install)
+        echo ""
+        echo "  Scatter System — Full Install"
+        echo "  ============================="
+        echo ""
+        echo "  This will install Ollama and pull the AI model."
+        echo "  Requires sudo for Ollama install."
+        echo ""
+
+        # Install Ollama
+        if ! command -v ollama &>/dev/null; then
+            echo "  Installing Ollama..."
+            curl -fsSL https://ollama.com/install.sh | sudo sh
+            echo ""
+        else
+            echo "  Ollama already installed."
+        fi
+
+        # Start Ollama if not running
+        if ! curl -sf http://localhost:11434/api/tags >/dev/null 2>&1; then
+            echo "  Starting Ollama..."
+            nohup ollama serve >/dev/null 2>&1 &
+            sleep 3
+        fi
+
+        # Pull model
+        MODEL="${SCATTER_MODEL:-qwen2.5-coder:7b}"
+        echo "  Pulling model: $MODEL (this takes a while on first run)..."
+        ollama pull "$MODEL"
+        echo ""
+
+        # Add to PATH
+        if ! echo "$PATH" | grep -q "$SCATTER_HOME/bin"; then
+            echo "export PATH=\"$SCATTER_HOME/bin:\$PATH\"" >> "$HOME/.bashrc"
+            echo "  Added scatter to PATH (restart shell or: source ~/.bashrc)"
+        fi
+
+        echo ""
+        echo "  Done. Run: scatter status"
+        echo ""
+        ;;
+    help|--help|-h|"")
+        echo ""
+        echo "  Scatter — Off-grid AI computing system"
+        echo ""
+        echo "  Commands:"
+        echo "    scatter code              AI coding agent (fix bugs, write code)"
+        echo "    scatter code \"fix X\"      Single-shot mode"
+        echo "    scatter ops               One-shot health check"
+        echo "    scatter ops --daemon      Continuous self-healing monitor"
+        echo "    scatter ops --incidents   View incident history"
+        echo "    scatter data              Data management & backups"
+        echo "    scatter data --backup     Backup all databases"
+        echo "    scatter journal           Record a decision (dialectical trace)"
+        echo "    scatter journal \"note\"    Quick journal entry"
+        echo "    scatter journal --review  Review recent decisions"
+        echo "    scatter journal --export  Export research journal to markdown"
+        echo "    scatter studio            Visual builder (opens in browser)"
+        echo "    scatter status            Full system status"
+        echo "    scatter setup             Check installation"
+        echo "    scatter install           Install Ollama + pull model"
+        echo ""
+        ;;
+    *)
+        echo "  Unknown command: $1"
+        echo "  Run 'scatter help' for usage."
+        exit 1
+        ;;
+esac

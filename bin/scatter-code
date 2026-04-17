@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# Scatter Code — launch the local AI coding agent
+exec python3 "$(dirname "$(readlink -f "$0")")/../scatter-code/scatter_code.py" "$@"

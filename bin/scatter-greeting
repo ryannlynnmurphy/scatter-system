@@ -1,0 +1,278 @@
+#!/usr/bin/env python3
+"""
+Scatter OS — System greeting.
+Reads hardware state, produces one sentence. The system's inner monologue IS the interface.
+"""
+
+import json
+import os
+import sys
+import subprocess
+import datetime
+import shutil
+from pathlib import Path
+from urllib.request import Request, urlopen
+from urllib.error import URLError
+
+OLLAMA_URL = os.environ.get("SCATTER_OLLAMA_URL", "http://localhost:11434")
+FAST_MODEL = os.environ.get("SCATTER_FAST_MODEL", "llama3.2:3b")
+
+DIM = "\033[2m"
+BOLD = "\033[1m"
+CYAN = "\033[36m"
+GREEN = "\033[32m"
+YELLOW = "\033[33m"
+RED = "\033[31m"
+RESET = "\033[0m"
+
+def get_system_state():
+    """Read real system state. No simulation. No approximation."""
+    state = {}
+
+    # Battery
+    bat_path = Path("/sys/class/power_supply/BAT0")
+    if bat_path.exists():
+        try:
+            state["battery_pct"] = int((bat_path / "capacity").read_text().strip())
+            state["battery_status"] = (bat_path / "status").read_text().strip()
+        except:
+            pass
+
+    # Memory
+    try:
+        mem = {}
+        for line in Path("/proc/meminfo").read_text().splitlines():
+            parts = line.split()
+            if len(parts) >= 2:
+                mem[parts[0].rstrip(":")] = int(parts[1])
+        total_gb = mem.get("MemTotal", 0) / 1048576
+        avail_gb = mem.get("MemAvailable", 0) / 1048576
+        state["ram_total_gb"] = round(total_gb, 1)
+        state["ram_available_gb"] = round(avail_gb, 1)
+        state["ram_used_pct"] = round((1 - avail_gb / total_gb) * 100) if total_gb > 0 else 0
+    except:
+        pass
+
+    # Disk
+    try:
+        usage = shutil.disk_usage("/")
+        state["disk_total_gb"] = round(usage.total / (1024**3))
+        state["disk_free_gb"] = round(usage.free / (1024**3))
+        state["disk_used_pct"] = round((usage.used / usage.total) * 100)
+    except:
+        pass
+
+    # CPU
+    try:
+        load1, load5, load15 = os.getloadavg()
+        state["cpu_load_1m"] = round(load1, 1)
+        state["cpu_cores"] = os.cpu_count()
+    except:
+        pass
+
+    # Thermal
+    try:
+        for tz in sorted(Path("/sys/class/thermal").glob("thermal_zone*")):
+            temp_file = tz / "temp"
+            type_file = tz / "type"
+            if temp_file.exists():
+                temp_c = int(temp_file.read_text().strip()) / 1000
+                tz_type = type_file.read_text().strip() if type_file.exists() else "unknown"
+                if temp_c > 0 and temp_c < 120:
+                    state["cpu_temp_c"] = round(temp_c, 1)
+                    break
+    except:
+        pass
+
+    # Network
+    try:
+        result = subprocess.run(
+            ["ip", "route", "get", "1.1.1.1"],
+            capture_output=True, text=True, timeout=3
+        )
+        if result.returncode == 0:
+            state["network"] = "connected"
+            for part in result.stdout.split():
+                if part.startswith("192.") or part.startswith("10.") or part.startswith("172."):
+                    state["local_ip"] = part
+                    break
+        else:
+            state["network"] = "disconnected"
+    except:
+        state["network"] = "unknown"
+
+    # Wifi SSID
+    try:
+        result = subprocess.run(
+            ["iwgetid", "-r"], capture_output=True, text=True, timeout=3
+        )
+        if result.returncode == 0:
+            state["wifi_ssid"] = result.stdout.strip()
+    except:
+        pass
+
+    # Ollama
+    try:
+        req = Request(f"{OLLAMA_URL}/api/tags", method="GET")
+        with urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read())
+            models = [m["name"] for m in data.get("models", [])]
+            state["ollama"] = "running"
+            state["ollama_models"] = models
+    except:
+        state["ollama"] = "down"
+        state["ollama_models"] = []
+
+    # Uptime
+    try:
+        uptime_sec = float(Path("/proc/uptime").read_text().split()[0])
+        hours = int(uptime_sec // 3600)
+        mins = int((uptime_sec % 3600) // 60)
+        state["uptime"] = f"{hours}h {mins}m"
+    except:
+        pass
+
+    # Time
+    now = datetime.datetime.now()
+    state["time"] = now.strftime("%H:%M")
+    state["date"] = now.strftime("%A, %B %d")
+    state["hour"] = now.hour
+
+    return state
+
+
+def format_greeting(state):
+    """Build the greeting. Sentences plus critical numbers."""
+    lines = []
+
+    lines.append("")
+    lines.append(f"  {BOLD}SCATTER{RESET}")
+    lines.append(f"  {DIM}{state.get('date', '')} — {state.get('time', '')}{RESET}")
+    lines.append("")
+
+    # Battery line
+    bat = state.get("battery_pct")
+    bat_status = state.get("battery_status", "")
+    if bat is not None:
+        if bat > 80:
+            color = GREEN
+            word = "Full" if bat > 95 else "Good"
+        elif bat > 30:
+            color = YELLOW
+            word = "Okay"
+        else:
+            color = RED
+            word = "Low"
+        charging = " (charging)" if bat_status == "Charging" else ""
+        lines.append(f"  Battery: {color}{bat}%{RESET} — {word}{charging}")
+
+    # RAM
+    ram_avail = state.get("ram_available_gb")
+    ram_total = state.get("ram_total_gb")
+    if ram_avail and ram_total:
+        lines.append(f"  Memory:  {ram_avail}GB free of {ram_total}GB")
+
+    # Disk
+    disk_free = state.get("disk_free_gb")
+    if disk_free:
+        lines.append(f"  Storage: {disk_free}GB free")
+
+    # Thermal
+    temp = state.get("cpu_temp_c")
+    if temp:
+        temp_word = "Cool" if temp < 50 else "Warm" if temp < 70 else "Hot"
+        lines.append(f"  Thermal: {temp}°C — {temp_word}")
+
+    # Network
+    net = state.get("network", "unknown")
+    ssid = state.get("wifi_ssid", "")
+    ip = state.get("local_ip", "")
+    if net == "connected":
+        net_str = f"  Network: {GREEN}Connected{RESET}"
+        if ssid:
+            net_str += f" ({ssid})"
+        if ip:
+            net_str += f" — {ip}"
+        lines.append(net_str)
+    else:
+        lines.append(f"  Network: {RED}Offline{RESET}")
+
+    # Ollama
+    ollama = state.get("ollama", "down")
+    models = state.get("ollama_models", [])
+    if ollama == "running":
+        if models:
+            model_str = ", ".join(m.split(":")[0] for m in models)
+            lines.append(f"  Ollama:  {GREEN}Running{RESET} — {model_str}")
+        else:
+            lines.append(f"  Ollama:  {YELLOW}Running{RESET} — no models pulled yet")
+    else:
+        lines.append(f"  Ollama:  {RED}Down{RESET}")
+
+    lines.append("")
+
+    # The sentence. The system speaks.
+    hour = state.get("hour", 12)
+    if hour < 12:
+        greeting = "Good morning, Ryann."
+    elif hour < 17:
+        greeting = "Good afternoon, Ryann."
+    else:
+        greeting = "Good evening, Ryann."
+
+    # Build a contextual sentence based on actual state
+    notes = []
+    if bat is not None and bat < 30:
+        notes.append(f"battery is at {bat}%, you should plug in")
+    if ollama == "down":
+        notes.append("Ollama isn't running — local inference is offline")
+    elif not models:
+        notes.append("Ollama is running but has no models yet")
+    if temp and temp > 70:
+        notes.append(f"running warm at {temp}°C")
+    if net != "connected":
+        notes.append("no network connection")
+
+    if notes:
+        sentence = f"  {greeting} {'; '.join(notes)}."
+    else:
+        sentence = f"  {greeting} All systems nominal."
+
+    lines.append(f"  {CYAN}{sentence.strip()}{RESET}")
+    lines.append("")
+
+    # Journal stats — your research reflected back
+    journal_dir = os.path.expanduser("~/.scatter/journal")
+    if os.path.isdir(journal_dir):
+        entries = list(Path(journal_dir).glob("*.json"))
+        if entries:
+            today = datetime.datetime.now().strftime("%Y%m%d")
+            today_count = sum(1 for e in entries if e.stem.startswith(today))
+            lines.append(f"  {DIM}Journal: {len(entries)} entries total, {today_count} today{RESET}")
+            lines.append("")
+
+    lines.append(f"  {DIM}scatter code    — local AI coding agent{RESET}")
+    lines.append(f"  {DIM}scatter journal — record a decision{RESET}")
+    lines.append(f"  {DIM}scatter status  — full system report{RESET}")
+    lines.append(f"  {DIM}claude          — Claude Code{RESET}")
+    lines.append("")
+
+    return "\n".join(lines)
+
+
+def write_state_file(state):
+    """Write system state to shared file so other Scatter components can read it.
+    The greeting feeds the system, not just the screen."""
+    state_path = os.path.expanduser("~/.scatter/system-state.json")
+    os.makedirs(os.path.dirname(state_path), exist_ok=True)
+    # Strip non-serializable stuff, add timestamp
+    state["written_at"] = datetime.datetime.now().isoformat()
+    with open(state_path, "w") as f:
+        json.dump(state, f, indent=2, default=str)
+
+
+if __name__ == "__main__":
+    state = get_system_state()
+    write_state_file(state)
+    if "--write-state-only" not in sys.argv:
+        print(format_greeting(state))
