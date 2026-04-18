@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Scatter wallpaper. Climate hacker palette: near-black substrate with
+     a single glyph centered-high-left to leave room for desktop files and
+     widgets, plus a subtle horizon vignette. Works at any resolution
+     (SVG scales). 3840×2160 declared as the canonical viewbox; GNOME and
+     most compositors render this cleanly on any display. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3840 2160"
+     preserveAspectRatio="xMidYMid slice"
+     width="3840" height="2160">
+  <defs>
+    <!-- deep substrate with a whisper of warmth at the top -->
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0f0f10"/>
+      <stop offset="35%" stop-color="#0a0a0a"/>
+      <stop offset="100%" stop-color="#050505"/>
+    </linearGradient>
+    <!-- soft horizon glow near the bottom (sustainability, dawn) -->
+    <radialGradient id="horizon" cx="50%" cy="100%" r="70%">
+      <stop offset="0%" stop-color="#00ff88" stop-opacity="0.06"/>
+      <stop offset="40%" stop-color="#00ff88" stop-opacity="0.02"/>
+      <stop offset="100%" stop-color="#00ff88" stop-opacity="0"/>
+    </radialGradient>
+    <!-- primary glyph glow -->
+    <radialGradient id="glyph-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#00ff88" stop-opacity="0.4"/>
+      <stop offset="60%" stop-color="#00ff88" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#00ff88" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- substrate -->
+  <rect width="3840" height="2160" fill="url(#sky)"/>
+  <rect width="3840" height="2160" fill="url(#horizon)"/>
+
+  <!-- Centered glyph, but slightly raised (upper-third rule). -->
+  <!-- Placed at 1920, 900 — leaves the lower 60% available for desktop chrome. -->
+  <g transform="translate(1920 900)">
+    <!-- aura -->
+    <circle r="220" fill="url(#glyph-glow)"/>
+
+    <!-- connective ring -->
+    <circle r="160" fill="none" stroke="#00ff88" stroke-width="1.5" stroke-opacity="0.2"/>
+
+    <!-- three satellites -->
+    <circle cx="0" cy="-130" r="13" fill="#00ff88"/>
+    <circle cx="112.6" cy="65" r="13" fill="#00ff88"/>
+    <circle cx="-112.6" cy="65" r="13" fill="#00ff88"/>
+
+    <!-- primary -->
+    <circle r="34" fill="#00ff88" opacity="0.35"/>
+    <circle r="28" fill="#00ff88"/>
+  </g>
+
+  <!-- One tiny amber pin-prick in the lower-right as a kept-secret warmth.
+       Amber is Scatter's secondary accent; having it present somewhere on
+       the wallpaper makes the whole palette felt, not just the green. -->
+  <circle cx="3600" cy="1920" r="3" fill="#ffb800" opacity="0.4"/>
+</svg>

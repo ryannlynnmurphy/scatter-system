@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# pre-commit — secret scan + architectural leak test.
+#
+# Enable for this repo (one-time):
+#   git config --local core.hooksPath scatter/hooks
+#
+# Blocks commits that contain:
+#   - Anthropic API keys (sk-ant-*)
+#   - Generic API key shapes (sk-proj-*, sk-...)
+#   - Tavily API keys (tvly-*)
+#   - Bearer tokens, raw x-api-key= lines with non-placeholder values
+#   - Anything that fails the architectural leak test
+#
+# Override only in true emergencies: `git commit --no-verify`. If you use
+# --no-verify, journal it so the record shows why.
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+RED=$'\033[0;31m'
+GREEN=$'\033[0;32m'
+YELLOW=$'\033[0;33m'
+RESET=$'\033[0m'
+
+FAIL=0
+
+# -------- 1. Secret scan on STAGED content --------
+
+STAGED=$(git diff --cached --name-only --diff-filter=ACM || true)
+
+if [ -n "$STAGED" ]; then
+    # Patterns that indicate real secrets (not placeholders).
+    # Tolerates the literal strings "ANTHROPIC_API_KEY" / "TAVILY_API_KEY" /
+    # "sk-ant-api03-..." (docs) / "<your-key>" / ""  so docs and empty configs pass.
+    SECRET_PATTERNS=(
+        # Anthropic key: sk-ant-api03-<62 base64-ish chars>
+        'sk-ant-api03-[A-Za-z0-9_-]{40,}'
+        # Generic project key sk-proj-...
+        'sk-proj-[A-Za-z0-9_-]{40,}'
+        # Generic OpenAI-style sk-<48+ chars>
+        'sk-[A-Za-z0-9]{40,}'
+        # Tavily
+        'tvly-[A-Za-z0-9]{20,}'
+        # Explicit Bearer tokens with non-trivial value
+        'Bearer[[:space:]]+[A-Za-z0-9_.-]{32,}'
+    )
+
+    for pat in "${SECRET_PATTERNS[@]}"; do
+        MATCH=$(git diff --cached -U0 | grep -E "^\+" | grep -Ev "^\+\+\+" | grep -E "$pat" || true)
+        if [ -n "$MATCH" ]; then
+            echo "${RED}✗ secret detected in staged changes${RESET}" >&2
+            echo "  pattern: $pat" >&2
+            echo "$MATCH" | head -3 | sed 's/^/  /' >&2
+            FAIL=1
+        fi
+    done
+
+    # Also check for hardcoded x-api-key: "abc..." with non-trivial content.
+    KEY_LINE=$(git diff --cached -U0 \
+        | grep -E "^\+" \
+        | grep -Ev "^\+\+\+" \
+        | grep -E '"(x-api-key|anthropic-api-key|api_key|apiKey)"[[:space:]]*:[[:space:]]*"[A-Za-z0-9_-]{20,}"' \
+        || true)
+    if [ -n "$KEY_LINE" ]; then
+        echo "${RED}✗ hardcoded API key literal detected${RESET}" >&2
+        echo "$KEY_LINE" | head -3 | sed 's/^/  /' >&2
+        FAIL=1
+    fi
+fi
+
+# -------- 2. Architectural leak test --------
+
+if [ -x "$REPO_ROOT/scatter/tests/test_leak_free.sh" ]; then
+    if ! "$REPO_ROOT/scatter/tests/test_leak_free.sh" > /dev/null 2>&1; then
+        echo "${RED}✗ architectural leak test failed${RESET}" >&2
+        echo "  run: scatter/tests/test_leak_free.sh" >&2
+        echo "  every external call must route through scatter/api.py" >&2
+        FAIL=1
+    fi
+fi
+
+# -------- 3. Python syntax on staged .py files --------
+
+if [ -n "$STAGED" ]; then
+    while IFS= read -r f; do
+        case "$f" in
+            *.py)
+                if [ -f "$f" ]; then
+                    if ! python3 -c "import ast; ast.parse(open('$f').read())" 2>/dev/null; then
+                        echo "${RED}✗ python syntax error: $f${RESET}" >&2
+                        python3 -c "import ast; ast.parse(open('$f').read())" 2>&1 | head -3 | sed 's/^/  /' >&2
+                        FAIL=1
+                    fi
+                fi
+                ;;
+        esac
+    done <<< "$STAGED"
+fi
+
+if [ "$FAIL" -eq 1 ]; then
+    echo "" >&2
+    echo "${YELLOW}pre-commit blocked the commit. fix the above and retry.${RESET}" >&2
+    echo "to bypass in an emergency: git commit --no-verify" >&2
+    echo "(and journal why)" >&2
+    exit 1
+fi
+
+echo "${GREEN}✓ pre-commit checks passed${RESET}"
+exit 0

@@ -1,0 +1,63 @@
+// Scatter Plymouth boot theme.
+// Pixel-art HZL canon: black background, green/amber progress dots.
+
+Window.SetBackgroundTopColor(0.039, 0.039, 0.039);
+Window.SetBackgroundBottomColor(0.039, 0.039, 0.039);
+
+logo.image = Image("logo.png");
+logo.sprite = Sprite(logo.image);
+logo.x = Window.GetX() + Window.GetWidth() / 2 - logo.image.GetWidth() / 2;
+logo.y = Window.GetY() + Window.GetHeight() / 2 - logo.image.GetHeight() / 2 - 40;
+logo.sprite.SetPosition(logo.x, logo.y, 10);
+
+dot.image = Image("dot.png");
+dot_amber.image = Image("dot-amber.png");
+
+num_dots = 7;
+dot_spacing = 48;
+dots = [];
+for (i = 0; i < num_dots; i++) {
+    d = Sprite(dot.image);
+    dx = Window.GetWidth() / 2 - (num_dots * dot_spacing) / 2 + i * dot_spacing;
+    dy = logo.y + logo.image.GetHeight() + 60;
+    d.SetPosition(dx, dy, 20);
+    d.SetOpacity(0.2);
+    dots[i] = d;
+}
+
+fun progress_cb(duration, progress) {
+    lit = Math.Int(progress * num_dots);
+    for (i = 0; i < num_dots; i++) {
+        if (i < lit) dots[i].SetOpacity(1.0);
+        else dots[i].SetOpacity(0.2);
+    }
+}
+Plymouth.SetBootProgressFunction(progress_cb);
+
+// Password prompt (for disk unlock, if any)
+status = "normal";
+fun display_password_cb(prompt, bullets) {
+    global.status = "password";
+    if (global.prompt_sprite) global.prompt_sprite = NULL;
+    txt = Image.Text(prompt + " " + ("*" * bullets), 0.78, 1.0, 0.53, 1.0);
+    global.prompt_sprite = Sprite(txt);
+    global.prompt_sprite.SetPosition(
+        Window.GetWidth() / 2 - txt.GetWidth() / 2,
+        Window.GetHeight() - 120,
+        30);
+}
+Plymouth.SetDisplayPasswordFunction(display_password_cb);
+
+fun display_normal_cb() {
+    if (global.prompt_sprite) { global.prompt_sprite = NULL; }
+}
+Plymouth.SetDisplayNormalFunction(display_normal_cb);
+
+fun message_cb(text) {
+    global.msg = Sprite(Image.Text(text, 0.78, 0.78, 0.82, 1.0));
+    global.msg.SetPosition(
+        Window.GetWidth() / 2 - global.msg.GetImage().GetWidth() / 2,
+        Window.GetHeight() - 80,
+        40);
+}
+Plymouth.SetMessageFunction(message_cb);

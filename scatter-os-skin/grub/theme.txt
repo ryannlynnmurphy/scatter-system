@@ -1,0 +1,48 @@
+# Scatter GRUB theme — HZL pixel-art canon.
+title-text: ""
+desktop-image: "background.png"
+desktop-color: "#0a0a0a"
+terminal-font: "Fixed Regular 14"
+terminal-box: "terminal_box_*.png"
+terminal-border: "0"
+message-color: "#c8c8d0"
+message-bg-color: "#0a0a0a"
+
++ boot_menu {
+    left = 20%
+    top = 45%
+    width = 60%
+    height = 40%
+    item_font = "DejaVu Sans Mono Bold 18"
+    item_color = "#c8c8d0"
+    selected_item_font = "DejaVu Sans Mono Bold 18"
+    selected_item_color = "#0a0a0a"
+    selected_item_pixmap_style = "select_bg.png"
+    item_height = 48
+    item_padding = 0
+    item_spacing = 4
+    icon_width = 0
+    icon_height = 0
+    item_icon_space = 0
+    scrollbar = false
+}
+
++ label {
+    top = 90%
+    left = 0
+    width = 100%
+    align = "center"
+    color = "#ffb800"
+    font = "DejaVu Sans Mono Bold 16"
+    text = "SCATTER — the alignment OS"
+}
+
++ label {
+    top = 5%
+    left = 0
+    width = 100%
+    align = "center"
+    color = "#00ff88"
+    font = "DejaVu Sans Mono Bold 20"
+    text = "small tech • local • yours"
+}

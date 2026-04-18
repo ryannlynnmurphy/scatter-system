@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Scatter wallpaper — Studio theme variant. Warm, printed-page feel for
+     writing-daytime work. Cream substrate, gold accent, subtle geometric
+     pattern suggesting a ruled notebook at the bottom. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 3840 2160"
+     preserveAspectRatio="xMidYMid slice"
+     width="3840" height="2160">
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FDFBF6"/>
+      <stop offset="60%" stop-color="#FAF8F5"/>
+      <stop offset="100%" stop-color="#F2EEE6"/>
+    </linearGradient>
+    <radialGradient id="studio-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#C9A96E" stop-opacity="0.18"/>
+      <stop offset="50%" stop-color="#C9A96E" stop-opacity="0.04"/>
+      <stop offset="100%" stop-color="#C9A96E" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="3840" height="2160" fill="url(#paper)"/>
+
+  <!-- Very subtle horizontal rule lines at the bottom 30% — suggests a
+       notebook without being literal. Opacity deliberately low. -->
+  <g stroke="#C9A96E" stroke-width="0.5" stroke-opacity="0.08">
+    <line x1="0" y1="1500" x2="3840" y2="1500"/>
+    <line x1="0" y1="1580" x2="3840" y2="1580"/>
+    <line x1="0" y1="1660" x2="3840" y2="1660"/>
+    <line x1="0" y1="1740" x2="3840" y2="1740"/>
+    <line x1="0" y1="1820" x2="3840" y2="1820"/>
+    <line x1="0" y1="1900" x2="3840" y2="1900"/>
+    <line x1="0" y1="1980" x2="3840" y2="1980"/>
+    <line x1="0" y1="2060" x2="3840" y2="2060"/>
+  </g>
+
+  <g transform="translate(1920 900)">
+    <circle r="220" fill="url(#studio-glow)"/>
+    <circle r="160" fill="none" stroke="#C9A96E" stroke-width="1.5" stroke-opacity="0.25"/>
+    <circle cx="0" cy="-130" r="13" fill="#C9A96E"/>
+    <circle cx="112.6" cy="65" r="13" fill="#C9A96E"/>
+    <circle cx="-112.6" cy="65" r="13" fill="#C9A96E"/>
+    <circle r="34" fill="#C9A96E" opacity="0.35"/>
+    <circle r="28" fill="#C9A96E"/>
+  </g>
+</svg>

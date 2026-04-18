@@ -28,9 +28,39 @@ case "${1:-}" in
         shift
         exec python3 "$SCATTER_HOME/scatter-journal/scatter_journal.py" "$@"
         ;;
-    studio)
+    studio|gui)
+        # Legacy aliases. `scatter` with no args now launches the GUI directly.
         shift
-        exec python3 "$SCATTER_HOME/scatter-studio/server.py" "$@"
+        exec python3 "$SCATTER_HOME/scatter/server.py" "$@"
+        ;;
+    wrap)
+        shift
+        exec python3 "$SCATTER_HOME/scatter/wrap.py" "$@"
+        ;;
+    ai)
+        shift
+        exec python3 "$SCATTER_HOME/scatter/ai_local.py" "$@"
+        ;;
+    welcome)
+        shift
+        exec python3 "$SCATTER_HOME/scatter-welcome/welcome.py" "$@"
+        ;;
+    backup)
+        shift
+        # `scatter backup <run|list>`; `scatter backup restore <file>` delegates to restore.py
+        case "${1:-}" in
+            restore)
+                shift
+                exec python3 "$SCATTER_HOME/scatter-backup/restore.py" "$@"
+                ;;
+            *)
+                exec python3 "$SCATTER_HOME/scatter-backup/backup.py" "$@"
+                ;;
+        esac
+        ;;
+    tests|test)
+        shift
+        exec "$SCATTER_HOME/scatter/tests/run_all.sh" "$@"
         ;;
     ipw)
         shift
@@ -164,26 +194,29 @@ print(', '.join(m['name'] for m in d.get('models',[])) or 'none')
         echo "  Done. Run: scatter status"
         echo ""
         ;;
-    help|--help|-h|"")
+    "")
+        # No args — launch the native Scatter app (GTK window hosting the GUI).
+        exec python3 "$SCATTER_HOME/scatter/launcher.py"
+        ;;
+    serve)
+        # Dev mode: run the HTTP server only, open in a real browser.
+        shift
+        exec python3 "$SCATTER_HOME/scatter/server.py" "$@"
+        ;;
+    help|--help|-h)
         echo ""
-        echo "  Scatter — Off-grid AI computing system"
+        echo "  Scatter — local-first AI computing"
         echo ""
-        echo "  Commands:"
-        echo "    scatter code              AI coding agent (fix bugs, write code)"
-        echo "    scatter code \"fix X\"      Single-shot mode"
-        echo "    scatter ops               One-shot health check"
-        echo "    scatter ops --daemon      Continuous self-healing monitor"
-        echo "    scatter ops --incidents   View incident history"
-        echo "    scatter data              Data management & backups"
-        echo "    scatter data --backup     Backup all databases"
-        echo "    scatter journal           Record a decision (dialectical trace)"
-        echo "    scatter journal \"note\"    Quick journal entry"
-        echo "    scatter journal --review  Review recent decisions"
-        echo "    scatter journal --export  Export research journal to markdown"
-        echo "    scatter studio            Visual builder (opens in browser)"
-        echo "    scatter status            Full system status"
-        echo "    scatter setup             Check installation"
-        echo "    scatter install           Install Ollama + pull model"
+        echo "  scatter                    Open Scatter (build anything you can describe)"
+        echo "  scatter code               Terminal coding agent"
+        echo "  scatter status             System status"
+        echo "  scatter setup              Check installation"
+        echo "  scatter install            Install Ollama + pull models"
+        echo ""
+        echo "  Legacy (phase-one scaffolding, retiring):"
+        echo "  scatter ops                Health monitor"
+        echo "  scatter data               Data management"
+        echo "  scatter journal            Legacy terminal journal (now lives inside Scatter)"
         echo ""
         ;;
     *)

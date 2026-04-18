@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Scatter mark, 16px / favicon / small-icon variant.
+     Simplified geometry: single dot + one satellite. At this size, three
+     satellites turn to noise. Two elements read clearly at 16×16. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16"
+     role="img" aria-label="Scatter">
+  <!-- primary: the machine -->
+  <circle cx="8" cy="8" r="2.4" fill="#00ff88"/>
+  <!-- one satellite: abbreviated sense of dispersion -->
+  <circle cx="13" cy="3" r="1.1" fill="#00ff88"/>
+</svg>

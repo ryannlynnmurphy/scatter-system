@@ -1,0 +1,148 @@
+/*
+ * Scatter design tokens — the climate hacker system.
+ *
+ * Single source of truth for color, typography, spacing, motion, and radius
+ * across every Scatter surface (Scatter GUI, scatter-welcome, scatter-browser
+ * chrome, future surfaces). Import this file or inline the :root block.
+ *
+ * Font families: JetBrains Mono + Inter are the intended primaries.
+ * They are not in the stdlib of Ubuntu 24.04; install via:
+ *   sudo apt install fonts-jetbrains-mono fonts-inter
+ * Graceful fallback to Ubuntu Mono / system-ui if missing.
+ *
+ * No network dependencies. No CDN. No @import from google fonts.
+ */
+
+:root {
+    /* ---------- color: substrate ---------- */
+    --scatter-bg-0: #0a0a0a;        /* deepest body */
+    --scatter-bg-1: #0d0d0d;        /* panel */
+    --scatter-bg-2: #111111;        /* elevated surface (entries, cards) */
+    --scatter-bg-3: #151515;        /* input background */
+
+    --scatter-border-0: #1a1a1a;
+    --scatter-border-1: #1f1f1f;
+    --scatter-border-2: #2a2a2a;
+
+    /* ---------- color: accents ---------- */
+    --scatter-green: #00ff88;
+    --scatter-green-glow: rgba(0, 255, 136, 0.5);
+    --scatter-green-bg-soft: rgba(0, 255, 136, 0.06);
+    --scatter-green-bg-medium: rgba(0, 255, 136, 0.08);
+    --scatter-green-border: rgba(0, 255, 136, 0.25);
+
+    --scatter-amber: #ffb800;
+    --scatter-amber-bg-soft: rgba(255, 184, 0, 0.06);
+    --scatter-amber-border: rgba(255, 184, 0, 0.2);
+
+    --scatter-warn: #ff8888;
+    --scatter-warn-bg-soft: rgba(255, 120, 120, 0.04);
+    --scatter-warn-border: rgba(255, 120, 120, 0.25);
+
+    /* ---------- color: text ---------- */
+    --scatter-text: #d8e4dc;
+    --scatter-text-dim: #b0b8b4;
+    --scatter-text-mute: #6a7a72;
+    --scatter-text-faint: #555555;
+    --scatter-text-ghost: #3a5a4a;
+
+    /* ---------- typography ---------- */
+    --scatter-font-mono: 'JetBrains Mono', 'Ubuntu Mono', 'SF Mono', Menlo, Consolas, monospace;
+    --scatter-font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+    --scatter-text-xs: 0.65rem;
+    --scatter-text-sm: 0.72rem;
+    --scatter-text-base: 0.85rem;
+    --scatter-text-md: 0.9rem;
+    --scatter-text-lg: 1.1rem;
+    --scatter-text-xl: 1.25rem;
+
+    --scatter-tracking-chrome: 0.06em;   /* lowercase chrome */
+    --scatter-tracking-brand: 0.08em;    /* SCATTER mark */
+
+    /* ---------- spacing (4px base) ---------- */
+    --scatter-space-1: 4px;
+    --scatter-space-2: 8px;
+    --scatter-space-3: 12px;
+    --scatter-space-4: 16px;
+    --scatter-space-5: 20px;
+    --scatter-space-6: 24px;
+    --scatter-space-8: 32px;
+
+    /* ---------- radius ---------- */
+    --scatter-radius-sm: 6px;
+    --scatter-radius-md: 10px;
+    --scatter-radius-lg: 12px;
+    --scatter-radius-pill: 999px;
+
+    /* ---------- motion ---------- */
+    /* Natural spring-like. Inspired by physical settling, not linear. */
+    --scatter-ease: cubic-bezier(0.2, 0.9, 0.3, 1.0);
+    --scatter-ease-in: cubic-bezier(0.4, 0, 1, 1);
+    --scatter-ease-out: cubic-bezier(0, 0, 0.2, 1);
+
+    --scatter-dur-fast: 150ms;
+    --scatter-dur-med: 250ms;
+    --scatter-dur-slow: 400ms;
+}
+
+/* ---------- Studio theme (prototype-era palette) ----------
+   Set data-theme="studio" on <html> or <body> to activate.
+   Warm, printed-page feel — cream, charcoal, gold. Writing-daytime mood.
+   Paired with DM Sans for body + Courier/JetBrains Mono for script-shaped text.
+   The :root values above remain the default Research theme; this selector
+   overrides the specific tokens that define the difference. */
+
+[data-theme="studio"] {
+    --scatter-bg-0: #FAF8F5;      /* cream body */
+    --scatter-bg-1: #F2EEE6;      /* panel */
+    --scatter-bg-2: #E8E2D5;      /* elevated */
+    --scatter-bg-3: #FFFFFF;      /* input */
+
+    --scatter-border-0: #D6CFC0;
+    --scatter-border-1: #C2BAA6;
+    --scatter-border-2: #A89E88;
+
+    /* Gold takes the place of green as primary accent. Amber stays as
+       secondary warning/attention color (it reads fine on cream). */
+    --scatter-green: #C9A96E;          /* legacy token name retained; value = gold */
+    --scatter-green-glow: rgba(201, 169, 110, 0.4);
+    --scatter-green-bg-soft: rgba(201, 169, 110, 0.08);
+    --scatter-green-bg-medium: rgba(201, 169, 110, 0.14);
+    --scatter-green-border: rgba(201, 169, 110, 0.4);
+
+    --scatter-amber: #B8860B;
+    --scatter-amber-bg-soft: rgba(184, 134, 11, 0.06);
+    --scatter-amber-border: rgba(184, 134, 11, 0.25);
+
+    --scatter-warn: #A03323;
+    --scatter-warn-bg-soft: rgba(160, 51, 35, 0.06);
+    --scatter-warn-border: rgba(160, 51, 35, 0.25);
+
+    --scatter-text: #2D2A26;            /* charcoal */
+    --scatter-text-dim: #54504A;
+    --scatter-text-mute: #7A7568;
+    --scatter-text-faint: #A0998A;
+    --scatter-text-ghost: #BFB8A8;
+
+    --scatter-font-mono: 'Courier Prime', 'Courier New', ui-monospace, monospace;
+    --scatter-font-sans: 'DM Sans', ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Universal resets that every Scatter surface wants. */
+.scatter-reset * { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* Scrollbars — same feel on every surface. */
+.scatter-scrollbars::-webkit-scrollbar { width: 6px; height: 6px; }
+.scatter-scrollbars::-webkit-scrollbar-track { background: transparent; }
+.scatter-scrollbars::-webkit-scrollbar-thumb {
+    background: var(--scatter-border-2);
+    border-radius: var(--scatter-radius-sm);
+}
+.scatter-scrollbars::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+
+/* Shared animations. */
+@keyframes scatter-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}

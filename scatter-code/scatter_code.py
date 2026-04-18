@@ -25,7 +25,7 @@ from urllib.error import URLError
 # ── Config ──────────────────────────────────────────────────────────────────
 
 OLLAMA_URL = os.environ.get("SCATTER_OLLAMA_URL", "http://localhost:11434")
-MODEL = os.environ.get("SCATTER_MODEL", "qwen2.5-coder:7b")
+MODEL = os.environ.get("SCATTER_MODEL", "qwen2.5-coder:1.5b")
 FAST_MODEL = os.environ.get("SCATTER_FAST_MODEL", "llama3.2:3b")
 MAX_CONTEXT = int(os.environ.get("SCATTER_CTX", "32768"))
 

@@ -202,7 +202,7 @@ def format_greeting(state):
     models = state.get("ollama_models", [])
     if ollama == "running":
         if models:
-            model_str = ", ".join(m.split(":")[0] for m in models)
+            model_str = ", ".join(m for m in models)
             lines.append(f"  Ollama:  {GREEN}Running{RESET} — {model_str}")
         else:
             lines.append(f"  Ollama:  {YELLOW}Running{RESET} — no models pulled yet")

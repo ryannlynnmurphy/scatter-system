@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Scatter glyph — first-pass.
+  Primary dot = the machine. Three satellites = journal / audit / watts.
+  Dispersal held together by proximity. Climate hacker palette.
+  Render well at 16px, 32px, 64px, 256px.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Scatter">
+  <defs>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- background: transparent -->
+
+  <!-- primary dot: the machine -->
+  <circle cx="128" cy="128" r="20" fill="#00ff88" filter="url(#glow)"/>
+
+  <!-- three satellites: journal, audit, watts -->
+  <!-- 120° apart, radius 72 from center -->
+  <circle cx="128" cy="56" r="7" fill="#00ff88"/>
+  <circle cx="190.4" cy="164" r="7" fill="#00ff88"/>
+  <circle cx="65.6" cy="164" r="7" fill="#00ff88"/>
+
+  <!-- soft connective arcs: coherence -->
+  <circle cx="128" cy="128" r="72" fill="none" stroke="#00ff88" stroke-width="0.5" stroke-opacity="0.35"/>
+</svg>

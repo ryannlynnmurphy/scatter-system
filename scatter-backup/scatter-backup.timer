@@ -1,0 +1,14 @@
+[Unit]
+Description=Run Scatter backup daily
+Documentation=file:///home/ryannlynnmurphy/scatter-system/scatter-backup/README.md
+
+[Timer]
+# Fire once a day, roughly 3am local. Persistent so a missed run
+# (laptop closed) triggers on next wake.
+OnCalendar=*-*-* 03:00:00
+RandomizedDelaySec=30min
+Persistent=true
+Unit=scatter-backup.service
+
+[Install]
+WantedBy=timers.target

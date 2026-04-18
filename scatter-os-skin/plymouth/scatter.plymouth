@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=Scatter
+Description=Scatter — the alignment OS. Pixel-art HZL canon.
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/scatter
+ScriptFile=/usr/share/plymouth/themes/scatter/scatter.script

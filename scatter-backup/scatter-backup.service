@@ -1,0 +1,20 @@
+[Unit]
+Description=Scatter encrypted backup
+Documentation=file:///home/ryannlynnmurphy/scatter-system/scatter-backup/README.md
+After=network.target
+
+[Service]
+Type=oneshot
+# Runs as the user who owns ~/.scatter. Adjust User= if you install
+# scatter in a different account.
+User=%i
+ExecStart=/usr/bin/python3 /home/ryannlynnmurphy/scatter-system/scatter-backup/backup.py run --passphrase-file %h/.scatter/backup-passphrase
+# Do not log the passphrase file path in syslog on failure; rely on
+# the Scatter journal for details.
+StandardOutput=journal
+StandardError=journal
+Nice=10
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=default.target

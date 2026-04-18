@@ -1,0 +1,9 @@
+{
+  "uuid": "scatter-watts@scattercomputing.org",
+  "name": "Scatter Watts",
+  "description": "Ambient display of cumulative Scatter watts in the top bar. Reads ~/.scatter/watts.jsonl every 10 seconds and shows the total joules spent this session.",
+  "shell-version": ["45", "46", "47"],
+  "version": 1,
+  "url": "https://github.com/ryannlynnmurphy/scatter-system",
+  "settings-schema": null
+}
