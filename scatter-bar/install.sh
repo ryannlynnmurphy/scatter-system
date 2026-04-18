@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Install the Scatter Bar GNOME Shell extension.
+# No sudo — extensions install under ~/.local/share/gnome-shell/extensions/.
+#
+# After install:
+#   1. Log out + back in (or restart GNOME Shell: Alt+F2, r, Enter on X11;
+#      Wayland requires a full log out).
+#   2. Enable: gnome-extensions enable scatter-bar@scattercomputing.org
+set -eu
+
+UUID="scatter-bar@scattercomputing.org"
+SRC="$(cd "$(dirname "$0")" && pwd)"
+DEST="$HOME/.local/share/gnome-shell/extensions/$UUID"
+
+echo "Installing Scatter Bar extension..."
+mkdir -p "$(dirname "$DEST")"
+rm -rf "$DEST"
+cp -r "$SRC" "$DEST"
+rm -f "$DEST/install.sh"
+
+echo "  ✓ installed at $DEST"
+echo
+echo "  next steps:"
+echo "    1. log out + log back in (or restart the shell on X11)"
+echo "    2. gnome-extensions enable $UUID"
+echo "    3. the router at http://127.0.0.1:8787 must be running"
+echo "    4. click 'scatter' in the top bar, type, press Enter"
+echo
+echo "  to remove: rm -rf $DEST"

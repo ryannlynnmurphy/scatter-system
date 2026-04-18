@@ -1,0 +1,9 @@
+{
+  "uuid": "scatter-bar@scattercomputing.org",
+  "name": "Scatter Bar",
+  "description": "Top-bar input to Scatter router. Click to open, type, press Enter, see route + response. Talks to the local FastAPI router at http://127.0.0.1:8787.",
+  "shell-version": ["45", "46", "47"],
+  "version": 1,
+  "url": "https://github.com/ryannlynnmurphy/scatter",
+  "settings-schema": null
+}

@@ -1,0 +1,52 @@
+/* Scatter Bar — input popup from the top panel. Matches the web UI register. */
+
+.scatter-bar-trigger {
+    font-family: 'JetBrains Mono', 'Victor Mono', 'Ubuntu Mono', monospace;
+    font-size: 11px;
+    color: #ffb800;
+    padding: 0 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.scatter-bar-item {
+    padding: 12px 14px;
+}
+
+.scatter-bar-container {
+    spacing: 8px;
+    min-width: 480px;
+}
+
+.scatter-bar-entry {
+    font-family: 'Victor Mono', 'JetBrains Mono', monospace;
+    font-size: 13px;
+    font-style: italic;
+    color: #e5e5e5;
+    background-color: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    padding: 8px 10px;
+    caret-color: #ffb800;
+}
+
+.scatter-bar-entry:focus {
+    border: 1px solid #ffb800;
+}
+
+.scatter-bar-route {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: #5a5a5a;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.scatter-bar-response {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: #e5e5e5;
+    padding: 4px 0;
+    min-width: 480px;
+    max-width: 520px;
+}
