@@ -291,6 +291,54 @@ def ollama_generate(messages):
     return result.get("message", {}).get("content", "")
 
 
+CHAT_SYSTEM = """You are Scatter. Reply in plain prose — one or two short sentences.
+Never output HTML, never output code blocks. Genuine, approachable, warm.
+If the user seems to want to make something, ask them one clarifying question."""
+
+
+def chat_reply(user_message, history=None):
+    """Short conversational reply from FAST_MODEL. No HTML, no code.
+
+    Used when the user has explicitly selected chat mode via the UI toggle.
+    Skips the intent router entirely."""
+    import time
+    msgs = [{"role": "system", "content": CHAT_SYSTEM}]
+    if history:
+        msgs.extend(history[-6:])
+    msgs.append({"role": "user", "content": user_message})
+    payload = {
+        "model": FAST_MODEL,
+        "messages": msgs,
+        "stream": False,
+        "options": {"num_ctx": 4096, "temperature": 0.5, "num_predict": 200},
+    }
+    req = Request(
+        f"{OLLAMA_URL}/api/chat",
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    t0 = time.monotonic()
+    try:
+        with urlopen(req, timeout=60) as resp:
+            result = json.loads(resp.read())
+    except (HTTPError, URLError) as e:
+        sc.watts_log(
+            source=f"model:{FAST_MODEL}",
+            joules=_watts_estimate(FAST_MODEL, time.monotonic() - t0),
+            duration_s=time.monotonic() - t0,
+        )
+        raise _humanize_ollama_error(e, FAST_MODEL) from e
+    duration = time.monotonic() - t0
+    tokens = int(result.get("prompt_eval_count", 0)) + int(result.get("eval_count", 0))
+    sc.watts_log(
+        source=f"model:{FAST_MODEL}",
+        joules=_watts_estimate(FAST_MODEL, duration),
+        duration_s=duration,
+        tokens=tokens,
+    )
+    return result.get("message", {}).get("content", "").strip()
+
+
 def route_intent(user_message):
     """Front door. Uses the fast model to classify: BUILD or CHAT.
 
@@ -514,6 +562,9 @@ class StudioHandler(http.server.BaseHTTPRequestHandler):
             data = json.loads(body)
             user_message = data.get("message", "").strip()
             session_id = data.get("session", "default")
+            requested_mode = (data.get("mode") or "auto").strip().lower()
+            if requested_mode not in ("auto", "chat", "build"):
+                requested_mode = "auto"
 
             if not user_message:
                 self.send_json({"error": "Empty message"})
@@ -525,9 +576,10 @@ class StudioHandler(http.server.BaseHTTPRequestHandler):
                     "messages": [{"role": "system", "content": STUDIO_SYSTEM}],
                     "current_html": EMPTY_PREVIEW,
                     "history": [],
+                    "chat_history": [],
                 }
-
             session = sessions[session_id]
+            session.setdefault("chat_history", [])
             has_existing = session["current_html"] != EMPTY_PREVIEW
 
             # Launcher first: Scatter is the apps button. If the message is
@@ -546,16 +598,26 @@ class StudioHandler(http.server.BaseHTTPRequestHandler):
                     self.send_json({"mode": "chat", "reply": reply, "status": "ok"})
                     return
 
-            # Route: chat or build? If there's no existing creation, run the
-            # router. If the user is modifying an existing creation, skip
-            # routing — modification language ("make it blue") often looks
-            # conversational but is a build.
-            if not has_existing:
+            # Mode resolution. Explicit user choice wins; auto falls back to
+            # the intent router (legacy behavior).
+            if requested_mode == "chat":
+                intent, reply = "chat", None
+            elif requested_mode == "build":
+                intent, reply = "build", None
+            elif not has_existing:
                 intent, reply = route_intent(user_message)
             else:
                 intent, reply = "build", None
 
             if intent == "chat":
+                try:
+                    if reply is None:
+                        reply = chat_reply(user_message, session["chat_history"])
+                except RuntimeError as e:
+                    self.send_json({"error": str(e), "status": "error"})
+                    return
+                session["chat_history"].append({"role": "user", "content": user_message})
+                session["chat_history"].append({"role": "assistant", "content": reply})
                 sc.journal_append(
                     "chat",
                     session=session_id,
@@ -797,15 +859,15 @@ MAIN_PAGE_TEMPLATE = """<!DOCTYPE html>
 body {
     height: 100vh;
     display: grid;
-    grid-template-columns: 380px 1fr;
+    grid-template-columns: 300px 1fr;
     font-family: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
     background: var(--scatter-bg-0);
     color: var(--scatter-text);
     /* Climate hacker palette: dark substrate, green accent (#00ff88), amber second (#ffb800). */
 }
 
-/* Chat panel */
-.chat-panel {
+/* ── Rail ── */
+.rail {
     display: flex;
     flex-direction: column;
     border-right: 1px solid var(--scatter-border-0);
@@ -813,23 +875,183 @@ body {
     min-height: 0;
     overflow: hidden;
 }
-
-.chat-header {
-    padding: 20px;
-    border-bottom: 1px solid var(--scatter-border-0);
-}
-
-.chat-header h1 {
-    font-family: "Inter", "Inter Display", "Helvetica Neue", sans-serif;
-    font-style: normal;
-    font-weight: 700;
-    font-size: 1.05rem;
-    letter-spacing: -0.01em;
+.rail-head {
     display: flex;
-    align-items: baseline;
-    gap: 12px;
-    text-transform: none;
+    align-items: center;
+    gap: 10px;
+    padding: 20px 20px 16px;
 }
+.rail-head .wordmark {
+    font-family: "Inter", "Helvetica Neue", sans-serif;
+    font-weight: 700;
+    font-size: 0.95rem;
+    letter-spacing: -0.01em;
+    flex: 1;
+}
+.rail-head .mode-toggle { margin: 0; }
+.mode-switch {
+    display: flex;
+    gap: 6px;
+    padding: 0 20px 8px;
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+}
+.mode-chip {
+    flex: 1;
+    background: transparent;
+    border: 1px solid var(--scatter-border-1, #1e1e2a);
+    color: #5a5a6e;
+    font-family: inherit;
+    font-size: inherit;
+    letter-spacing: inherit;
+    padding: 5px 0;
+    cursor: pointer;
+    text-transform: lowercase;
+    transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+.mode-chip:hover { color: #c8c8d0; border-color: #3a3a4a; }
+.mode-chip.active {
+    color: #0a0a0a;
+    background: #00ff88;
+    border-color: #00ff88;
+    font-weight: 700;
+}
+.mode-chip[data-mode="build"].active {
+    background: #ffb800;
+    border-color: #ffb800;
+}
+
+.composer {
+    display: flex;
+    gap: 8px;
+    padding: 0 20px 16px;
+}
+.composer input {
+    flex: 1;
+    background: transparent;
+    border: 1px solid var(--scatter-border-1, #1e1e2a);
+    color: var(--scatter-text);
+    font-family: inherit;
+    font-size: 0.88rem;
+    padding: 10px 12px;
+    outline: none;
+    transition: border-color 120ms ease;
+}
+.composer input:focus { border-color: #00ff88; }
+.composer input::placeholder { color: #5a5a6e; font-style: italic; }
+.composer .btn {
+    background: #00ff88;
+    color: #0a0a0a;
+    border: none;
+    font-family: inherit;
+    font-weight: 700;
+    padding: 0 16px;
+    cursor: pointer;
+    min-width: 44px;
+}
+.composer .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.subnav {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 20px;
+    border-top: 1px solid var(--scatter-border-0);
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+}
+.subnav-sep { flex: 1; }
+.sub-link {
+    background: transparent;
+    border: none;
+    color: #5a5a6e;
+    font: inherit;
+    font-size: inherit;
+    letter-spacing: inherit;
+    text-transform: lowercase;
+    cursor: pointer;
+    padding: 0;
+    transition: color 120ms ease;
+}
+.sub-link:hover { color: #c8c8d0; }
+.sub-link.active { color: #00ff88; }
+
+.rail-foot {
+    margin-top: auto;
+    border-top: 1px solid var(--scatter-border-0);
+}
+.watts-row {
+    padding: 10px 20px;
+    font-size: 0.65rem;
+    color: #666;
+    display: flex;
+    justify-content: space-between;
+    letter-spacing: 0.06em;
+}
+.watts-row .j-value { color: var(--scatter-green, #00ff88); font-variant-numeric: tabular-nums; }
+
+/* ── Canvas ── */
+.canvas {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+.canvas-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--scatter-border-0);
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    color: #5a5a6e;
+}
+.stream {
+    flex: 1;
+    overflow-y: auto;
+    padding: 32px 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+.stream-empty {
+    margin: auto;
+    text-align: center;
+    color: #5a5a6e;
+    font-family: "Inter", "Helvetica Neue", sans-serif;
+}
+.stream-empty-glyph {
+    font-family: "JetBrains Mono", monospace;
+    color: #00ff88;
+    font-size: 0.8rem;
+    margin-bottom: 14px;
+}
+.stream-empty-title {
+    font-size: 1.4rem;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    color: #c8c8d0;
+    margin-bottom: 6px;
+}
+.stream-empty-sub { font-size: 0.78rem; letter-spacing: -0.005em; }
+
+.stream-build {
+    background: #0a0a0a;
+    border: 1px solid var(--scatter-border-0);
+    border-radius: 6px;
+    overflow: hidden;
+    max-width: 960px;
+    align-self: stretch;
+}
+.stream-build iframe {
+    display: block;
+    width: 100%;
+    height: 480px;
+    border: 0;
+    background: #fff;
+}
+
 .scatter-face {
     font-family: "JetBrains Mono", monospace;
     font-style: normal;
@@ -843,15 +1065,6 @@ body {
 .scatter-face.online { color: #ffb800; }
 .scatter-face.error { color: #ff3355; }
 .scatter-face.sleeping { color: #5a5a6e; }
-
-.chat-header p {
-    font-family: "Inter", "Helvetica Neue", sans-serif;
-    font-style: normal;
-    font-size: 0.78rem;
-    color: #5a5a6e;
-    margin-top: 10px;
-    letter-spacing: -0.005em;
-}
 
 .mode-toggle {
     display: inline-flex;
@@ -897,12 +1110,6 @@ body {
 @keyframes mode-pulse {
     0%, 100% { box-shadow: inset 0 0 0 0 rgba(255, 184, 0, 0); }
     50%      { box-shadow: inset 0 0 12px 0 rgba(255, 184, 0, 0.25); }
-}
-
-.chat-messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 16px;
 }
 
 .message {
@@ -964,40 +1171,6 @@ body {
     border: 1px solid rgba(255, 120, 120, 0.2);
 }
 
-.chat-input-area {
-    padding: 16px;
-    border-top: 1px solid var(--scatter-border-0);
-}
-
-.chat-input-row {
-    display: flex;
-    gap: 18px;
-}
-
-#chat-input {
-    flex: 1;
-    background: #0a0a0a;
-    border: 1px solid #1e1e2a;
-    color: #c8c8d0;
-    padding: 16px 18px;
-    border-radius: 0;
-    font-size: 0.95rem;
-    font-family: inherit;
-    outline: none;
-    letter-spacing: 0.01em;
-    caret-color: #00ff88;
-    transition: border-color 120ms ease;
-}
-
-#chat-input:focus {
-    border-color: #00ff88;
-}
-
-#chat-input::placeholder {
-    color: #5a5a6e;
-    font-style: italic;
-}
-
 .btn {
     background: #00ff88;
     color: #0a0a0a;
@@ -1022,156 +1195,6 @@ body {
 }
 .btn:active { background: #c8c8d0; border-color: #c8c8d0; }
 .btn:disabled { opacity: 0.35; cursor: not-allowed; }
-
-.chat-actions {
-    display: flex;
-    gap: 14px;
-    margin-top: 22px;
-}
-
-.btn-small {
-    background: transparent;
-    color: #5a5a6e;
-    border: 1px solid #1e1e2a;
-    padding: 7px 16px;
-    border-radius: 0;
-    font-family: "Inter", "Helvetica Neue", sans-serif;
-    font-style: normal;
-    font-size: 0.72rem;
-    font-weight: 500;
-    letter-spacing: -0.005em;
-    text-transform: none;
-    cursor: pointer;
-    transition: color 160ms ease, border-color 160ms ease;
-    min-width: 64px;
-}
-
-.btn-small:hover { color: #ffb800; border-color: #ffb800; }
-
-/* View tabs: Build / Journal / Audit — pixel-tight, breathable, readable */
-.view-tabs {
-    display: flex;
-    gap: 14px;
-    padding: 16px 24px;
-    border-bottom: 1px solid var(--scatter-border-0);
-}
-
-.view-tab {
-    flex: 1;
-    background: transparent;
-    color: #5a5a6e;
-    border: 1px solid #1e1e2a;
-    padding: 9px 14px;
-    border-radius: 0;
-    font-family: "Inter", "Helvetica Neue", sans-serif;
-    font-style: normal;
-    font-size: 0.76rem;
-    font-weight: 500;
-    cursor: pointer;
-    letter-spacing: -0.005em;
-    text-transform: none;
-    transition: color 160ms ease, border-color 160ms ease, background 160ms ease;
-}
-
-.view-tab:hover { color: #ffb800; border-color: #ffb800; }
-
-.view-tab.active {
-    background: #00ff88;
-    color: #0a0a0a;
-    border-color: #00ff88;
-    font-weight: 600;
-}
-
-/* Rabbit holes — the app menu lives inside the prompt.
-   Every item is a real affordance; editorial spacing, no cramped lists. */
-.rabbit-holes {
-    margin: 6px 20px 20px;
-}
-.rabbit-heading {
-    font-family: "Inter", "Helvetica Neue", sans-serif;
-    font-size: 0.66rem;
-    font-weight: 600;
-    color: #5a5a6e;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    margin-bottom: 10px;
-    padding-left: 2px;
-}
-.rabbit-holes ul {
-    list-style: none;
-    margin: 0; padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-.rabbit {
-    display: block;
-    width: 100%;
-    text-align: left;
-    background: transparent;
-    border: none;
-    padding: 8px 4px 8px 18px;
-    color: #c8c8d0;
-    font-family: "Inter", "Helvetica Neue", sans-serif;
-    font-size: 0.88rem;
-    font-weight: 500;
-    letter-spacing: -0.005em;
-    cursor: pointer;
-    position: relative;
-    transition: color 120ms ease, padding-left 160ms cubic-bezier(0.2, 0, 0, 1);
-}
-.rabbit::before {
-    content: "›";
-    position: absolute;
-    left: 0;
-    color: #5a5a6e;
-    font-weight: 400;
-    transition: color 120ms ease, transform 160ms cubic-bezier(0.2, 0, 0, 1);
-}
-.rabbit:hover {
-    color: #ffb800;
-    padding-left: 22px;
-}
-.rabbit:hover::before {
-    color: #ffb800;
-    transform: translateX(2px);
-}
-.rabbit:focus-visible {
-    outline: 1px solid #00ff88;
-    outline-offset: 2px;
-}
-
-/* Talk-to-scatter prompt strip — a real affordance. Clicking focuses input. */
-.prompt-strip {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 16px 20px;
-    margin: 0 20px 16px;
-    background: #0a0a0a;
-    border: 1px solid #1e1e2a;
-    border-radius: 0;
-    color: #c8c8d0;
-    cursor: text;
-    font-family: inherit;
-    font-size: 0.9rem;
-    letter-spacing: 0.02em;
-    transition: border-color 120ms ease;
-}
-.prompt-strip:hover { border-color: #ffb800; }
-.prompt-strip .prompt-sigil { color: #ffb800; font-weight: 700; }
-.prompt-strip .prompt-face { color: #00ff88; font-weight: 700; letter-spacing: 0; }
-.prompt-strip .prompt-text { color: #5a5a6e; }
-.prompt-strip .prompt-cursor {
-    display: inline-block;
-    width: 8px;
-    height: 1em;
-    background: #00ff88;
-    vertical-align: text-bottom;
-    margin-left: 2px;
-    animation: prompt-blink 1s steps(2) infinite;
-}
-@keyframes prompt-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
 
 /* Views are in a stack. Only the active one is visible. */
 .view {
@@ -1319,24 +1342,6 @@ body {
 }
 
 /* Preview panel */
-.preview-panel {
-    display: flex;
-    flex-direction: column;
-}
-
-.preview-header {
-    padding: 12px 20px;
-    border-bottom: 1px solid var(--scatter-border-0);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-.preview-header span {
-    font-size: 0.75rem;
-    color: #555;
-}
-
 .status-dot {
     width: 8px;
     height: 8px;
@@ -1377,12 +1382,6 @@ body {
     50% { opacity: 0.3; }
 }
 
-#preview-frame {
-    flex: 1;
-    border: none;
-    background: #000;
-}
-
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -1391,85 +1390,78 @@ body {
 </head>
 <body>
 
-<div class="chat-panel">
-    <div class="chat-header">
-        <h1><span id="scatter-face" class="scatter-face">(◉.◉)</span> SCATTER</h1>
-        <p>the alignment OS · build anything you can describe · yours</p>
-        <button class="mode-toggle" id="mode-toggle" title="click to toggle — sending to a data center should be conscious" onclick="toggleMode()">
+<aside class="rail">
+    <div class="rail-head">
+        <span id="scatter-face" class="scatter-face">(◉.◉)</span>
+        <span class="wordmark">SCATTER</span>
+        <button class="mode-toggle" id="mode-toggle" title="data leaves the machine only when you say so" onclick="toggleMode()">
             <span class="mode-dot"></span>
-            <span class="mode-label" id="mode-label">local only</span>
+            <span class="mode-label" id="mode-label">local</span>
         </button>
     </div>
 
-    <div class="prompt-strip" onclick="document.getElementById('chat-input').focus()">
-        <span class="prompt-face" id="prompt-face">(◉.◉)</span>
-        <span class="prompt-text">talk to scatter…</span>
-        <span class="prompt-cursor"></span>
+    <div class="mode-switch" role="tablist" aria-label="mode">
+        <button class="mode-chip active" id="mode-chat" data-mode="chat" onclick="setMode('chat')" role="tab" aria-selected="true">chat</button>
+        <button class="mode-chip" id="mode-build" data-mode="build" onclick="setMode('build')" role="tab" aria-selected="false">build</button>
     </div>
+    <form class="composer" onsubmit="event.preventDefault(); send();">
+        <input id="chat-input" type="text" placeholder="say something" autocomplete="off" autofocus>
+        <button class="btn" id="send-btn" type="submit" aria-label="send">↵</button>
+    </form>
 
-    <nav class="rabbit-holes" aria-label="rabbit holes">
-        <div class="rabbit-heading">start here</div>
-        <ul>
-            <li><button type="button" class="rabbit" data-action="focus">build something</button></li>
-            <li><button type="button" class="rabbit" data-action="launch" data-target="files">browse your computer</button></li>
-            <li><button type="button" class="rabbit" data-action="launch" data-target="firefox">open the web</button></li>
-            <li><button type="button" class="rabbit" data-action="launch" data-target="terminal">open a terminal</button></li>
-            <li><button type="button" class="rabbit" data-action="view" data-target="journal">plot of your work</button></li>
-            <li><button type="button" class="rabbit" data-action="view" data-target="audit">count your watts</button></li>
-        </ul>
+    <nav class="subnav">
+        <button class="sub-link active" data-view="build" onclick="switchView('build')">build</button>
+        <button class="sub-link" data-view="journal" onclick="switchView('journal')">journal</button>
+        <button class="sub-link" data-view="audit" onclick="switchView('audit')">audit</button>
+        <span class="subnav-sep"></span>
+        <button class="sub-link" onclick="saveProject()">save</button>
+        <button class="sub-link" onclick="resetProject()">new</button>
     </nav>
 
-    <div class="view-tabs">
-        <button class="view-tab active" data-view="build" onclick="switchView('build')">build</button>
-        <button class="view-tab" data-view="journal" onclick="switchView('journal')">journal</button>
-        <button class="view-tab" data-view="audit" onclick="switchView('audit')">audit</button>
+    <div class="rail-foot">
+        <div class="watts-breakdown" id="watts-breakdown"></div>
+        <div class="watts-row">
+            <span><button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">theme</button> watts</span>
+            <span><span class="j-value" id="watts-value">0.00</span> J</span>
+        </div>
     </div>
+</aside>
 
+<main class="canvas">
+    <div class="canvas-head">
+        <span><span class="status-dot" id="status-dot"></span><span id="status-text">ready</span></span>
+        <span class="bubble-badge" id="bubble-badge"><span class="bubble-dot"></span><span id="bubble-text">in the bubble</span></span>
+    </div>
     <div class="view active" id="view-build">
-        <div class="chat-messages" id="messages"></div>
-        <div class="chat-input-area">
-            <div class="chat-input-row">
-                <input id="chat-input" type="text" placeholder="describe what you want to make" autocomplete="off">
-                <button class="btn" id="send-btn" onclick="send()">Build</button>
-            </div>
-            <div class="chat-actions">
-                <button class="btn-small" onclick="saveProject()">Save</button>
-                <button class="btn-small" onclick="resetProject()">New</button>
+        <div class="stream" id="stream">
+            <div class="stream-empty" id="stream-empty">
+                <div class="stream-empty-glyph">•</div>
+                <div class="stream-empty-title">nothing yet</div>
+                <div class="stream-empty-sub">say what you want to see.</div>
             </div>
         </div>
     </div>
-
-    <div class="view" id="view-journal">
-        <div class="entry-list" id="journal-list"></div>
-    </div>
-
-    <div class="view" id="view-audit">
-        <div class="entry-list" id="audit-list"></div>
-    </div>
-
-    <div class="watts-breakdown" id="watts-breakdown"></div>
-    <div class="watts-footer">
-        <span>
-            <button class="theme-toggle" id="theme-toggle" title="switch theme" onclick="toggleTheme()">theme</button>
-            <span>watts</span>
-        </span>
-        <span><span class="j-value" id="watts-value">0.00</span> joules</span>
-    </div>
-</div>
-
-<div class="preview-panel">
-    <div class="preview-header">
-        <span><span class="status-dot" id="status-dot"></span><span id="status-text">Ready</span></span>
-        <span class="bubble-badge" id="bubble-badge"><span class="bubble-dot"></span><span id="bubble-text">in the bubble</span></span>
-    </div>
-    <iframe id="preview-frame" src="/preview" sandbox="allow-scripts allow-same-origin"></iframe>
-</div>
+    <div class="view" id="view-journal"><div class="entry-list" id="journal-list"></div></div>
+    <div class="view" id="view-audit"><div class="entry-list" id="audit-list"></div></div>
+</main>
 
 <script>
 const input = document.getElementById('chat-input');
-const messages = document.getElementById('messages');
+const stream = document.getElementById('stream');
+const streamEmpty = document.getElementById('stream-empty');
 const sendBtn = document.getElementById('send-btn');
-const frame = document.getElementById('preview-frame');
+let currentMode = 'chat';
+
+function setMode(m) {
+    if (m !== 'chat' && m !== 'build') return;
+    currentMode = m;
+    document.querySelectorAll('.mode-chip').forEach(el => {
+        const on = el.dataset.mode === m;
+        el.classList.toggle('active', on);
+        el.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    input.placeholder = m === 'build' ? 'describe what to build' : 'say something';
+}
 const statusDot = document.getElementById('status-dot');
 const statusText = document.getElementById('status-text');
 const bubbleBadge = document.getElementById('bubble-badge');
@@ -1534,7 +1526,6 @@ let FACES = {
 };
 let currentFaceState = 'idle';
 const scatterFace = document.getElementById('scatter-face');
-const promptFace = document.getElementById('prompt-face');
 
 function setFace(state) {
     if (state === currentFaceState) return;
@@ -1544,47 +1535,9 @@ function setFace(state) {
         scatterFace.textContent = glyph;
         scatterFace.className = 'scatter-face ' + state;
     }
-    if (promptFace) {
-        promptFace.textContent = glyph;
-    }
 }
 
 fetch('/face').then(r => r.json()).then(d => { FACES = d.faces; setFace('idle'); }).catch(() => {});
-
-// Rabbit holes — the prompt IS the app menu. Click = do the thing.
-document.querySelectorAll('.rabbit').forEach(el => {
-    el.addEventListener('click', async () => {
-        const action = el.dataset.action;
-        const target = el.dataset.target || '';
-        const label = el.textContent.trim();
-        if (action === 'focus') {
-            document.getElementById('chat-input').focus();
-            return;
-        }
-        if (action === 'view') {
-            if (typeof switchView === 'function') switchView(target);
-            return;
-        }
-        if (action === 'launch') {
-            // Route through /build — the server's try_launch handles the
-            // allowlist. Same code path as typing "open firefox" in the
-            // input, so every rabbit hole is honest about what it does.
-            try {
-                const res = await fetch('/build', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ message: 'open ' + target }),
-                });
-                const data = await res.json();
-                if (data.mode === 'chat' && data.reply) {
-                    addMessage(data.reply, 'chat');
-                }
-            } catch (e) {
-                addMessage('the signal dropped. ' + e.message, 'error');
-            }
-        }
-    });
-});
 
 input.addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -1594,14 +1547,13 @@ input.addEventListener('keydown', e => {
 });
 
 function addMessage(text, type = 'system') {
+    if (streamEmpty) streamEmpty.remove();
     const div = document.createElement('div');
     div.className = 'message ' + type;
     const textNode = document.createElement('span');
     textNode.className = 'message-text';
     textNode.textContent = text;
     div.appendChild(textNode);
-    // Click-to-speak on Scatter's voice (chat replies + system notes).
-    // Never on user input (they said it) or errors (reading an error aloud is rude).
     if (type === 'chat' || type === 'system') {
         const btn = document.createElement('button');
         btn.className = 'speak-btn';
@@ -1611,8 +1563,20 @@ function addMessage(text, type = 'system') {
         btn.addEventListener('click', () => speakMessage(text, btn));
         div.appendChild(btn);
     }
-    messages.appendChild(div);
-    messages.scrollTop = messages.scrollHeight;
+    stream.appendChild(div);
+    stream.scrollTop = stream.scrollHeight;
+}
+
+function addBuild(html) {
+    if (streamEmpty) streamEmpty.remove();
+    const card = document.createElement('div');
+    card.className = 'stream-build';
+    const iframe = document.createElement('iframe');
+    iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin');
+    iframe.srcdoc = html;
+    card.appendChild(iframe);
+    stream.appendChild(card);
+    stream.scrollTop = stream.scrollHeight;
 }
 
 async function speakMessage(text, btn) {
@@ -1661,7 +1625,7 @@ async function send() {
         const resp = await fetch('/build', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: text })
+            body: JSON.stringify({ message: text, mode: currentMode })
         });
         const data = await resp.json();
 
@@ -1672,9 +1636,8 @@ async function send() {
             addMessage(data.reply || '…', 'chat');
             setFace('idle');
         } else if (data.html) {
-            frame.srcdoc = data.html;
-            addMessage('rendered.', 'system');
-            statusText.textContent = 'rendering';
+            addBuild(data.html);
+            statusText.textContent = 'rendered';
             setFace('building');
         }
     } catch (e) {
@@ -1724,7 +1687,7 @@ async function switchView(name) {
     currentView = name;
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.getElementById('view-' + name).classList.add('active');
-    document.querySelectorAll('.view-tab').forEach(t => t.classList.toggle('active', t.dataset.view === name));
+    document.querySelectorAll('.sub-link[data-view]').forEach(t => t.classList.toggle('active', t.dataset.view === name));
 
     if (name === 'journal') await loadJournal();
     if (name === 'audit') await loadAudit();
