@@ -810,6 +810,8 @@ body {
     flex-direction: column;
     border-right: 1px solid var(--scatter-border-0);
     background: var(--scatter-bg-1);
+    min-height: 0;
+    overflow: hidden;
 }
 
 .chat-header {
@@ -1176,8 +1178,9 @@ body {
     flex: 1;
     display: none;
     overflow-y: auto;
+    min-height: 0;
 }
-.view.active { display: flex; flex-direction: column; }
+.view.active { display: flex; flex-direction: column; min-height: 0; }
 
 /* Journal / Audit list items */
 .entry-list {
