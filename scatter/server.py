@@ -30,6 +30,27 @@ from urllib.error import URLError, HTTPError
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import scatter_core as sc  # noqa: E402
 
+
+def _load_env():
+    """Merge scatter/.env into os.environ without overwriting existing vars.
+    Stdlib-only; honors KEY=VALUE lines and strips optional quotes. .env is
+    gitignored so secrets (ElevenLabs, etc.) live here, not in source."""
+    env_path = Path(__file__).resolve().parent / ".env"
+    if not env_path.is_file():
+        return
+    for line in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+_load_env()
+
 PORT = int(os.environ.get("SCATTER_STUDIO_PORT", "3333"))
 OLLAMA_URL = os.environ.get("SCATTER_OLLAMA_URL", "http://localhost:11434")
 MODEL = os.environ.get("SCATTER_MODEL", "qwen2.5-coder:7b")
@@ -614,6 +635,48 @@ class StudioHandler(http.server.BaseHTTPRequestHandler):
             session_id = "default"
             sessions.pop(session_id, None)
             self.send_json({"status": "ok"})
+        elif self.path == "/speak":
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length)
+            try:
+                data = json.loads(body or "{}")
+            except json.JSONDecodeError:
+                data = {}
+            text = (data.get("text") or "").strip()
+            prefer_local = bool(data.get("prefer_local", True))
+            if not text:
+                self.send_json({"error": "empty text"})
+                return
+            # Cloud path requires online mode. Data-leaves-consciously rule:
+            # the user's online toggle in the header is the conscious handshake.
+            if not prefer_local and not is_online():
+                self.send_json({
+                    "error": "cloud voice needs online mode. toggle the bubble badge.",
+                })
+                return
+            try:
+                from . import tts as tts_mod
+            except Exception:
+                import importlib.util as _iu
+                _p = os.path.join(os.path.dirname(__file__), "tts.py")
+                _spec = _iu.spec_from_file_location("scatter_tts", _p)
+                tts_mod = _iu.module_from_spec(_spec)
+                _spec.loader.exec_module(tts_mod)
+            try:
+                if prefer_local:
+                    audio = tts_mod.speak_local(text)
+                    ctype = "audio/wav"
+                else:
+                    audio = tts_mod.speak_cloud(text)
+                    ctype = "audio/mpeg"
+            except RuntimeError as e:
+                self.send_json({"error": str(e), "status": "error"})
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(audio)))
+            self.end_headers()
+            self.wfile.write(audio)
         elif self.path == "/mode":
             content_length = int(self.headers.get("Content-Length", 0))
             body = self.rfile.read(content_length) if content_length else b"{}"
@@ -847,6 +910,9 @@ body {
     font-size: 0.9rem;
     line-height: 1.5;
     max-width: 95%;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
 }
 
 .message.user {
@@ -870,6 +936,25 @@ body {
     border-bottom-left-radius: 4px;
     border: 1px solid rgba(255, 184, 0, 0.2);
 }
+
+.message .message-text { flex: 1; min-width: 0; }
+
+.speak-btn {
+    flex: 0 0 auto;
+    background: transparent;
+    border: 1px solid currentColor;
+    color: inherit;
+    opacity: 0.55;
+    font: inherit;
+    font-size: 0.7rem;
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+.speak-btn:hover { opacity: 1; }
+.speak-btn[data-playing="1"] { opacity: 1; }
 
 .message.error {
     background: rgba(255, 120, 120, 0.06);
@@ -1508,9 +1593,53 @@ input.addEventListener('keydown', e => {
 function addMessage(text, type = 'system') {
     const div = document.createElement('div');
     div.className = 'message ' + type;
-    div.textContent = text;
+    const textNode = document.createElement('span');
+    textNode.className = 'message-text';
+    textNode.textContent = text;
+    div.appendChild(textNode);
+    // Click-to-speak on Scatter's voice (chat replies + system notes).
+    // Never on user input (they said it) or errors (reading an error aloud is rude).
+    if (type === 'chat' || type === 'system') {
+        const btn = document.createElement('button');
+        btn.className = 'speak-btn';
+        btn.title = 'speak';
+        btn.setAttribute('aria-label', 'speak this message');
+        btn.textContent = '▸';
+        btn.addEventListener('click', () => speakMessage(text, btn));
+        div.appendChild(btn);
+    }
     messages.appendChild(div);
     messages.scrollTop = messages.scrollHeight;
+}
+
+async function speakMessage(text, btn) {
+    if (btn.dataset.playing === '1') return;
+    btn.dataset.playing = '1';
+    const prior = btn.textContent;
+    btn.textContent = '•';
+    try {
+        const resp = await fetch('/speak', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, prefer_local: !bubbleBadge.classList.contains('online') ? true : (btn.dataset.cloud === '1') }),
+        });
+        const ct = resp.headers.get('Content-Type') || '';
+        if (!resp.ok || ct.startsWith('application/json')) {
+            const err = await resp.json().catch(() => ({error: 'speak failed'}));
+            addMessage(err.error || 'speak failed', 'error');
+            return;
+        }
+        const blob = await resp.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.onended = () => URL.revokeObjectURL(url);
+        await audio.play();
+    } catch (e) {
+        addMessage('could not speak: ' + e.message, 'error');
+    } finally {
+        btn.textContent = prior;
+        btn.dataset.playing = '0';
+    }
 }
 
 async function send() {
