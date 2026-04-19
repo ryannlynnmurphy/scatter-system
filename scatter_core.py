@@ -163,12 +163,13 @@ def audit_read(limit: Optional[int] = None, include_forgotten: bool = False) -> 
 
 # ---------- watts (energy accounting) ----------
 
-def watts_log(source: str, joules: float, duration_s: float) -> None:
+def watts_log(source: str, joules: float, duration_s: float, tokens: int = 0) -> None:
     _append(WATTS, {
         "ts": _now(),
         "source": source,
         "joules": joules,
         "duration_s": duration_s,
+        "tokens": tokens,
     })
 
 
@@ -178,6 +179,33 @@ def watts_total(since_iso: Optional[str] = None) -> float:
         if since_iso is None or e.get("ts", "") >= since_iso:
             total += float(e.get("joules", 0))
     return total
+
+
+def watts_rollup(since_iso: Optional[str] = None) -> list[dict]:
+    """Per-source rollup. Returns list sorted by tokens/joule, descending.
+
+    Old entries without a tokens field count as 0 tokens; joules still tally."""
+    agg: dict = {}
+    for e in _iter(WATTS):
+        if since_iso is not None and e.get("ts", "") < since_iso:
+            continue
+        src = e.get("source", "unknown")
+        row = agg.setdefault(src, {"source": src, "calls": 0, "joules": 0.0, "tokens": 0})
+        row["calls"] += 1
+        row["joules"] += float(e.get("joules", 0))
+        row["tokens"] += int(e.get("tokens", 0) or 0)
+    out = []
+    for row in agg.values():
+        tpj = row["tokens"] / row["joules"] if row["joules"] > 0 else None
+        out.append({
+            "source": row["source"],
+            "calls": row["calls"],
+            "joules": round(row["joules"], 3),
+            "tokens": row["tokens"],
+            "tokens_per_joule": round(tpj, 3) if tpj is not None else None,
+        })
+    out.sort(key=lambda r: (r["tokens_per_joule"] or 0), reverse=True)
+    return out
 
 
 # ---------- forget (local revocability) ----------

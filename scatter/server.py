@@ -24,7 +24,7 @@ import webbrowser
 import datetime
 from pathlib import Path
 from urllib.request import Request, urlopen
-from urllib.error import URLError
+from urllib.error import URLError, HTTPError
 
 # scatter_core lives at ~/scatter-system/scatter_core.py (one level up)
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -206,6 +206,33 @@ def _watts_estimate(model_name, duration_s):
     return watts * max(duration_s, 0.0)
 
 
+def _humanize_ollama_error(exc, model_name):
+    """Map urllib exceptions from Ollama into a plain-English RuntimeError.
+
+    Why: raw str(HTTPError) renders as "HTTP Error 404: Not Found" in the UI.
+    Users need to know what to do, not what urllib thinks."""
+    if isinstance(exc, HTTPError):
+        body = ""
+        try:
+            body = exc.read().decode(errors="replace")[:300]
+        except Exception:
+            pass
+        if exc.code == 404:
+            return RuntimeError(
+                f"the local model '{model_name}' isn't pulled. "
+                f"in a terminal: ollama pull {model_name}"
+            )
+        return RuntimeError(f"ollama returned HTTP {exc.code}. {body}".strip())
+    if isinstance(exc, URLError):
+        reason = getattr(exc, "reason", exc)
+        if "refused" in str(reason).lower():
+            return RuntimeError("ollama isn't running. in a terminal: ollama serve")
+        if "timed out" in str(reason).lower():
+            return RuntimeError("ollama took too long to respond. is it loading the model?")
+        return RuntimeError(f"can't reach ollama at {OLLAMA_URL}. {reason}")
+    return exc
+
+
 def ollama_generate(messages):
     """Call Ollama (build model) and return the full response. Logs watts."""
     import time
@@ -222,13 +249,23 @@ def ollama_generate(messages):
         headers={"Content-Type": "application/json"},
     )
     t0 = time.monotonic()
-    with urlopen(req, timeout=300) as resp:
-        result = json.loads(resp.read())
+    try:
+        with urlopen(req, timeout=300) as resp:
+            result = json.loads(resp.read())
+    except (HTTPError, URLError) as e:
+        sc.watts_log(
+            source=f"model:{MODEL}",
+            joules=_watts_estimate(MODEL, time.monotonic() - t0),
+            duration_s=time.monotonic() - t0,
+        )
+        raise _humanize_ollama_error(e, MODEL) from e
     duration = time.monotonic() - t0
+    tokens = int(result.get("prompt_eval_count", 0)) + int(result.get("eval_count", 0))
     sc.watts_log(
         source=f"model:{MODEL}",
         joules=_watts_estimate(MODEL, duration),
         duration_s=duration,
+        tokens=tokens,
     )
     return result.get("message", {}).get("content", "")
 
@@ -268,10 +305,12 @@ def route_intent(user_message):
         )
         return ("build", None)
     duration = time.monotonic() - t0
+    tokens = int(result.get("prompt_eval_count", 0)) + int(result.get("eval_count", 0))
     sc.watts_log(
         source=f"model:{FAST_MODEL}",
         joules=_watts_estimate(FAST_MODEL, duration),
         duration_s=duration,
+        tokens=tokens,
     )
 
     upper = content.upper().lstrip()
@@ -384,7 +423,10 @@ class StudioHandler(http.server.BaseHTTPRequestHandler):
             entries = sc.audit_read(limit=limit_i)
             self.send_json({"entries": entries, "count": len(entries)})
         elif self.path.startswith("/api/watts"):
-            self.send_json({"total_joules": sc.watts_total()})
+            self.send_json({
+                "total_joules": sc.watts_total(),
+                "by_source": sc.watts_rollup(),
+            })
         elif self.path.startswith("/api/profile"):
             self.send_json({"profile": sc.profile()})
         else:
@@ -1150,6 +1192,24 @@ body {
 
 .watts-footer .j-value { color: var(--scatter-green, #00ff88); font-variant-numeric: tabular-nums; }
 
+.watts-breakdown {
+    padding: 6px 16px 0;
+    font-size: 0.6rem;
+    color: #555;
+    letter-spacing: 0.04em;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.watts-breakdown:empty { display: none; }
+.watts-breakdown .row {
+    display: flex;
+    justify-content: space-between;
+    font-variant-numeric: tabular-nums;
+}
+.watts-breakdown .src { color: #777; }
+.watts-breakdown .tpj { color: var(--scatter-green, #00ff88); }
+
 .theme-toggle {
     background: transparent;
     border: 1px solid var(--scatter-border-1, #1f1f1f);
@@ -1299,6 +1359,7 @@ body {
         <div class="entry-list" id="audit-list"></div>
     </div>
 
+    <div class="watts-breakdown" id="watts-breakdown"></div>
     <div class="watts-footer">
         <span>
             <button class="theme-toggle" id="theme-toggle" title="switch theme" onclick="toggleTheme()">theme</button>
@@ -1688,6 +1749,15 @@ async function updateWatts() {
         const resp = await fetch('/api/watts');
         const data = await resp.json();
         document.getElementById('watts-value').textContent = Number(data.total_joules || 0).toFixed(2);
+        const bd = document.getElementById('watts-breakdown');
+        const rows = (data.by_source || []).filter(r => r.tokens > 0);
+        if (!rows.length) { bd.innerHTML = ''; return; }
+        const shortSource = s => s.replace(/^model:/, '');
+        bd.innerHTML = rows.map(r =>
+            `<div class="row"><span class="src">${shortSource(r.source)}</span>` +
+            `<span><span class="tpj">${r.tokens_per_joule ?? '—'}</span> tok/J ` +
+            `<span style="color:#444"> · ${r.tokens} tok · ${r.joules.toFixed(2)} J</span></span></div>`
+        ).join('');
     } catch (e) { /* silent */ }
 }
 updateWatts();

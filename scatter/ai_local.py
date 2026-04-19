@@ -30,7 +30,7 @@ import time
 from pathlib import Path
 from typing import Optional
 from urllib.request import Request, urlopen
-from urllib.error import URLError
+from urllib.error import URLError, HTTPError
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import scatter_core as sc  # noqa: E402
@@ -68,8 +68,21 @@ def _ollama_generate(model: str, prompt: str, images: Optional[list[str]] = None
         headers={"Content-Type": "application/json"},
     )
     t0 = time.monotonic()
-    with urlopen(req, timeout=300) as resp:
-        result = json.loads(resp.read())
+    try:
+        with urlopen(req, timeout=300) as resp:
+            result = json.loads(resp.read())
+    except HTTPError as e:
+        if e.code == 404:
+            raise RuntimeError(
+                f"the local model '{model}' isn't pulled. "
+                f"in a terminal: ollama pull {model}"
+            ) from e
+        raise RuntimeError(f"ollama returned HTTP {e.code}") from e
+    except URLError as e:
+        reason = getattr(e, "reason", e)
+        if "refused" in str(reason).lower():
+            raise RuntimeError("ollama isn't running. in a terminal: ollama serve") from e
+        raise RuntimeError(f"can't reach ollama at {OLLAMA_URL}. {reason}") from e
     duration = time.monotonic() - t0
     # Rough watts estimate. Real numbers come from task #30.
     joules = 35.0 * duration if "7b" in model or "13b" in model else 18.0 * duration
