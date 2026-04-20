@@ -286,52 +286,110 @@ export default class ScatterBarExtension extends Extension {
         });
     }
 
-    // ── Desktop modality: prose replies render on the wallpaper as durational
-    // text. Playwright's stage direction, not a chrome overlay. No background,
-    // no border, no box — composition on the substrate.
+    // ── Desktop modality: prose replies render as a durable chat bubble
+    // on the wallpaper. Dismissed by × or by the next reply — never by a
+    // timer. The machine does not decide when her thought disappears.
 
     _buildDesktopSurface() {
-        this._desktop = new St.Label({
+        this._desktop = new St.BoxLayout({
             name: 'scatterDesktop',
+            style_class: 'scatter-desktop-bubble',
+            vertical: true,
+            reactive: true,
+        });
+
+        // Top row: text (flex) + close glyph.
+        const topRow = new St.BoxLayout({
+            style_class: 'scatter-desktop-row',
+            vertical: false,
+        });
+        this._desktopText = new St.Label({
             style_class: 'scatter-desktop-text',
             text: '',
+            x_expand: true,
+            y_align: Clutter.ActorAlign.START,
         });
-        this._desktop.clutter_text.line_wrap = true;
-        this._desktop.clutter_text.line_wrap_mode = 2;
+        this._desktopText.clutter_text.line_wrap = true;
+        this._desktopText.clutter_text.line_wrap_mode = 2;
+
+        this._desktopClose = new St.Button({
+            style_class: 'scatter-desktop-close',
+            label: '×',
+            can_focus: true,
+            track_hover: true,
+            reactive: true,
+        });
+        this._desktopClose.connect('clicked', () => this._hideDesktop());
+
+        topRow.add_child(this._desktopText);
+        topRow.add_child(this._desktopClose);
+        this._desktop.add_child(topRow);
+
+        // Teach-trail footer: provenance of the reply. Dim, editorial.
+        this._desktopTrail = new St.Label({
+            style_class: 'scatter-desktop-trail',
+            text: '',
+        });
+        this._desktop.add_child(this._desktopTrail);
+
         this._desktop.opacity = 0;
         this._desktop.visible = false;
         Main.layoutManager.addChrome(this._desktop, {
-            affectsInputRegion: false,
+            affectsInputRegion: true,
         });
     }
 
-    _showDesktop(text) {
+    _showDesktop(text, meta) {
         if (this._desktopHideTimeout) {
             GLib.source_remove(this._desktopHideTimeout);
             this._desktopHideTimeout = 0;
         }
-        this._desktop.set_text(text);
+        this._desktopText.set_text(text);
+        this._desktopTrail.set_text(this._formatTrail(meta || {}));
         this._desktop.visible = true;
         this._place();
         this._desktop.ease({
             opacity: 255,
-            duration: 600,
+            duration: 320,
             mode: Clutter.AnimationMode.EASE_OUT_QUAD,
         });
-        // Hold proportional to length: reading pace ~80ms/char, clamped.
-        const holdMs = Math.min(30000, Math.max(5000, text.length * 80));
-        this._desktopHideTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, holdMs, () => {
-            this._desktopHideTimeout = 0;
-            if (this._desktop) {
-                this._desktop.ease({
-                    opacity: 0,
-                    duration: 800,
-                    mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-                    onComplete: () => { if (this._desktop) this._desktop.visible = false; },
-                });
-            }
-            return GLib.SOURCE_REMOVE;
+        // No auto-fade. The bubble stays until × is clicked or the next
+        // reply replaces it. Sovereignty over your own thoughts includes
+        // sovereignty over when they disappear.
+    }
+
+    _hideDesktop() {
+        if (!this._desktop || !this._desktop.visible) return;
+        this._desktop.ease({
+            opacity: 0,
+            duration: 220,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            onComplete: () => { if (this._desktop) this._desktop.visible = false; },
         });
+    }
+
+    // Teach-trail: 'local · llama · 0.4s' or 'cloud · sonnet · egress on'.
+    // Makes provenance visible on every reply — the patent claim, rendered.
+    _formatTrail(meta) {
+        const parts = [];
+        const route = meta.route || '';
+        if (route.startsWith('cloud:')) {
+            parts.push('cloud');
+            const model = route.split(':')[1];
+            if (model) parts.push(model);
+            parts.push('egress on');
+        } else if (route.startsWith('local:')) {
+            parts.push('local');
+            const m = meta.model || route.split(':')[1];
+            if (m) parts.push(String(m).split(':')[0]);
+        } else if (route) {
+            parts.push(route);
+        }
+        if (meta.ms !== undefined) {
+            const s = Math.max(0, meta.ms / 1000);
+            parts.push(s < 10 ? `${s.toFixed(1)}s` : `${Math.round(s)}s`);
+        }
+        return parts.join(' · ');
     }
 
     _showResponse(route, text, holdMs = 6000) {
@@ -447,11 +505,10 @@ export default class ScatterBarExtension extends Extension {
             );
         }
         if (this._desktop) {
-            // Desktop text: centered horizontally, sits in the upper third of
-            // the workspace (above the bar's reach, well clear of wallpaper
-            // glyph placement). Max width ~60% of screen.
-            const desktopWidth = Math.min(1200, Math.floor(monitor.width * 0.60));
-            const verticalInset = Math.floor((monitor.height - BAR_HEIGHT) * 0.28);
+            // Bubble: upper-center, max ~56% width so long replies wrap
+            // without feeling like a billboard. Height auto.
+            const desktopWidth = Math.min(1040, Math.floor(monitor.width * 0.56));
+            const verticalInset = Math.floor((monitor.height - BAR_HEIGHT) * 0.22);
             this._desktop.set_size(desktopWidth, -1);
             this._desktop.set_position(
                 monitor.x + Math.floor((monitor.width - desktopWidth) / 2),
@@ -571,7 +628,11 @@ export default class ScatterBarExtension extends Extension {
                     if (route === 'local:launch' || route === 'local:shell') {
                         this._showResponse(route, reply, 8000);
                     } else {
-                        this._showDesktop(reply);
+                        this._showDesktop(reply, {
+                            route,
+                            model: data.model,
+                            ms: data.ms,
+                        });
                         this._speak(reply);
                     }
                 } catch (e) {
