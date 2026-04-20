@@ -81,9 +81,23 @@ export default class ScatterBarExtension extends Extension {
 
         this._monitorsChangedId = Main.layoutManager.connect(
             'monitors-changed', () => this._place());
+
+        // Boot greet: once per shell session, Scatter names the state of
+        // the machine so sovereignty is legible before the first prompt.
+        // Deferred ~1.2s so the shell settles and the bubble doesn't
+        // flash during extension re-enable cycles.
+        this._greetTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1200, () => {
+            this._greetTimeout = 0;
+            this._bootGreet();
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     disable() {
+        if (this._greetTimeout) {
+            GLib.source_remove(this._greetTimeout);
+            this._greetTimeout = 0;
+        }
         if (this._monitorsChangedId) {
             Main.layoutManager.disconnect(this._monitorsChangedId);
             this._monitorsChangedId = 0;
@@ -356,6 +370,21 @@ export default class ScatterBarExtension extends Extension {
         // No auto-fade. The bubble stays until × is clicked or the next
         // reply replaces it. Sovereignty over your own thoughts includes
         // sovereignty over when they disappear.
+    }
+
+    // Boot greet — named state of the machine at first paint. Runs once
+    // per shell session via the timeout scheduled in enable().
+    _bootGreet() {
+        const parts = [
+            "I'm awake.",
+            "Cloud is off.",
+            "Voice is off.",
+            "Running locally.",
+        ];
+        this._showDesktop(parts.join(' '), {
+            route: 'local:greet',
+            model: 'scatter',
+        });
     }
 
     _hideDesktop() {

@@ -19,6 +19,14 @@ cp -r "$SRC" "$DEST"
 rm -f "$DEST/install.sh"
 
 echo "  ✓ installed at $DEST"
+
+# Window controls: close-only × on the right. GNOME's red/yellow/green is
+# off-brand and the bare "no controls" experiment stranded Ryann. One button
+# that closes the window is the accessibility floor.
+if command -v gsettings >/dev/null 2>&1; then
+    gsettings set org.gnome.desktop.wm.preferences button-layout ':close' || true
+    echo "  ✓ window controls: ':close'"
+fi
 echo
 echo "  next steps:"
 echo "    1. log out + log back in (or restart the shell on X11)"
