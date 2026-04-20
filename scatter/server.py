@@ -1471,6 +1471,53 @@ body {
     letter-spacing: -0.005em;
 }
 
+/* Chat exchange: how the Journal renders conversations with Scatter. */
+.chat-exchange {
+    background: transparent;
+    border-left: 1px solid #1f1f1f;
+    padding: 2px 10px 10px;
+    margin: 0 8px 14px;
+}
+.chat-turn {
+    font-size: 0.85rem;
+    line-height: 1.45;
+    padding: 6px 0;
+    color: #d8e4dc;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.chat-turn .chat-who {
+    display: inline-block;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: #5a5a6e;
+    margin-right: 8px;
+    min-width: 54px;
+}
+.chat-turn.user .chat-who { color: #00ff88; }
+.chat-turn.scatter .chat-who { color: #ffb800; }
+.chat-trail {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.12em;
+    color: #444;
+    padding-top: 6px;
+}
+.chat-break {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: #5a5a6e;
+    text-align: center;
+    padding: 18px 0;
+    margin: 6px 8px;
+    border-top: 1px solid #1f1f1f;
+    border-bottom: 1px solid #1f1f1f;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -1490,12 +1537,12 @@ body {
     </div>
 
     <div class="inspector-note">
-        Scatter's journal. The bar at the bottom of the screen is how you talk.
+        Your chats with Scatter. The bar at the bottom of the screen is how you talk.
     </div>
 
     <nav class="subnav">
         <button class="sub-link active" data-view="journal" onclick="switchView('journal')">journal</button>
-        <button class="sub-link" data-view="audit" onclick="switchView('audit')">audit</button>
+        <button class="sub-link" onclick="newChat()">new chat</button>
     </nav>
 
     <div class="rail-foot">
@@ -1618,51 +1665,54 @@ function escapeHTML(s) {
 }
 
 // ---------- journal view ----------
+// Reads chat exchanges from the router (/chats). Only conversations show
+// up here — not the full database of system events. The full audit is a
+// separate, less-prominent view.
+const ROUTER_CHATS_URL = 'http://127.0.0.1:8787/chats?limit=100';
+
 async function loadJournal() {
     const list = document.getElementById('journal-list');
     list.innerHTML = '<div class="empty-note">loading…</div>';
     try {
-        const resp = await fetch('/api/journal?limit=100');
+        const resp = await fetch(ROUTER_CHATS_URL);
         const data = await resp.json();
-        if (!data.entries || data.entries.length === 0) {
-            list.innerHTML = '<div class="empty-note">no entries yet.<br>build something.</div>';
+        const entries = (data.entries || []);
+        if (entries.length === 0) {
+            list.innerHTML = '<div class="empty-note">no chats yet.<br>say something to scatter.</div>';
             return;
         }
-        // Show most recent first
-        const entries = [...data.entries].reverse();
-        list.innerHTML = entries.map(renderJournalEntry).join('');
+        // Most recent first; include any client-side session-break markers.
+        const rendered = [];
+        for (let i = entries.length - 1; i >= 0; i--) {
+            rendered.push(renderChatExchange(entries[i]));
+        }
+        list.innerHTML = rendered.join('');
     } catch (e) {
-        list.innerHTML = '<div class="empty-note">could not load journal.</div>';
+        list.innerHTML = '<div class="empty-note">could not load chats.</div>';
     }
 }
 
-function renderJournalEntry(e) {
-    const id = escapeHTML(e.id);
-    const kind = escapeHTML(e.kind || '');
-    const ts = fmtTime(e.ts);
-    let body = '';
-    if (e.kind === 'build') {
-        body = `<div class="entry-body">${escapeHTML(e.prompt || '')}</div>`;
-    } else if (e.kind === 'chat') {
-        body = `<div class="entry-body"><em>you:</em> ${escapeHTML(e.user_message || '')}</div>
-                <div class="entry-body" style="color:#ffb800;"><em>scatter:</em> ${escapeHTML(e.reply || '')}</div>`;
-    } else if (e.kind === 'build_error') {
-        body = `<div class="entry-body">${escapeHTML(e.prompt || '')}</div>
-                <div class="entry-meta" style="color:#ff8888;">${escapeHTML(e.error || '')}</div>`;
-    } else {
-        body = `<div class="entry-body">${escapeHTML(JSON.stringify(e).slice(0, 200))}</div>`;
+function renderChatExchange(e) {
+    if (e.route === 'break') {
+        return `<div class="chat-break">— new chat —</div>`;
     }
+    const ts = fmtTime(new Date((e.ts || 0) * 1000).toISOString());
+    const route = escapeHTML(e.route || '');
+    const user = escapeHTML(e.user || '');
+    const reply = escapeHTML(e.reply || '');
     return `
-    <div class="entry">
-      <div class="entry-head">
-        <span class="entry-kind ${kind}">${kind}</span>
-        <span style="display:flex;gap:8px;align-items:center;">
-          <span class="entry-ts">${ts}</span>
-          <button class="btn-forget" title="forget this entry" onclick="forgetEntry('${id}', 'journal')">×</button>
-        </span>
-      </div>
-      ${body}
+    <div class="chat-exchange">
+      <div class="chat-turn user"><span class="chat-who">you</span>${user}</div>
+      <div class="chat-turn scatter"><span class="chat-who">scatter</span>${reply}</div>
+      <div class="chat-trail">${ts} · ${route}</div>
     </div>`;
+}
+
+async function newChat() {
+    try {
+        await fetch('http://127.0.0.1:8787/chats/break', { method: 'POST' });
+    } catch (e) { /* router may be down; UI still refreshes */ }
+    await loadJournal();
 }
 
 // ---------- audit view ----------

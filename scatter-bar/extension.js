@@ -387,6 +387,16 @@ export default class ScatterBarExtension extends Extension {
         });
     }
 
+    _hideResponse() {
+        if (!this._overlay || !this._overlay.visible) return;
+        this._overlay.ease({
+            opacity: 0,
+            duration: 180,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            onComplete: () => { if (this._overlay) this._overlay.visible = false; },
+        });
+    }
+
     _hideDesktop() {
         if (!this._desktop || !this._desktop.visible) return;
         this._desktop.ease({
@@ -657,6 +667,10 @@ export default class ScatterBarExtension extends Extension {
                     if (route === 'local:launch' || route === 'local:shell') {
                         this._showResponse(route, reply, 8000);
                     } else {
+                        // Reply goes to the durable desktop bubble — dismiss
+                        // the transient ROUTING overlay first so they don't
+                        // both sit on screen.
+                        this._hideResponse();
                         this._showDesktop(reply, {
                             route,
                             model: data.model,
