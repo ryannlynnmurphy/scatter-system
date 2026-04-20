@@ -13,17 +13,22 @@
     background-color: #0a0a0a;
     border: none;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
-    padding: 0 40px;
-    spacing: 20px;
+    padding: 0 48px;
+    spacing: 0;
 }
 
+/* The glyph owns its own column. No one shares space with it.
+ * Faint green glow marks >-< as the living eye of the machine — local,
+ * ready, watching. Soft enough to read as ambient light, not neon. */
 .scatter-bar-glyph {
     font-family: 'JetBrains Mono', 'Victor Mono', monospace;
-    font-size: 28px;
+    font-size: 32px;
     font-weight: 500;
     color: #c8c8c8;
-    letter-spacing: 0.04em;
-    padding-right: 4px;
+    letter-spacing: 0.08em;
+    min-width: 96px;
+    text-shadow: 0 0 12px rgba(74, 222, 128, 0.55),
+                 0 0 28px rgba(74, 222, 128, 0.28);
 }
 
 .scatter-bar-entry {
@@ -37,7 +42,7 @@
     border-radius: 0;
     caret-color: #ffb800;
     caret-size: 2;
-    padding: 0;
+    padding: 0 0 0 56px;
     min-width: 400px;
 }
 
@@ -45,6 +50,15 @@
     background-color: transparent;
     border: none;
     box-shadow: none;
+}
+
+/* Focus-brighten: when the entry has focus, the >-< glyph brightens.
+ * Binary confirmation ("I hear you"), not a pulsing AI-listening dot.
+ * Triggered from JS via style-class toggle (St CSS has no :focus-within). */
+.scatter-bar-glyph.listening {
+    color: #e8e8e8;
+    text-shadow: 0 0 14px rgba(74, 222, 128, 0.75),
+                 0 0 32px rgba(74, 222, 128, 0.38);
 }
 
 .scatter-bar-entry StLabel {
@@ -57,28 +71,17 @@
     background-color: transparent;
 }
 
-/* APPS — tracked caps, clickable text, no button chrome. */
+/* Status strip — glanceable system state in Scatter's register.
+ * Replaces what used to live in GNOME's top panel. One surface, not two. */
 
-.scatter-bar-apps {
-    font-family: 'Inter', sans-serif;
+.scatter-bar-status {
+    font-family: 'JetBrains Mono', monospace;
     font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.24em;
+    font-weight: 500;
+    letter-spacing: 0.08em;
     color: #8a8a8a;
-    background-color: transparent;
-    background-gradient-direction: none;
-    border: none;
-    border-radius: 0;
     padding: 0 16px;
-    min-height: 72px;
-    min-width: 80px;
-}
-.scatter-bar-apps:hover {
-    color: #ffb800;
-}
-.scatter-bar-apps:active {
-    color: #ffb800;
-    background-color: transparent;
+    min-width: 220px;
 }
 
 /* ── Reveal: cascade of apps above the bar ─────────────────────────────── */
@@ -152,4 +155,19 @@
     color: #f5f2ea;
     min-width: 640px;
     max-width: 720px;
+}
+
+/* ── Desktop modality: reply renders on the wallpaper ─────────────────── */
+/* No box. No border. No background. Composition on the substrate.        */
+/* Large Inter Light, generous leading, bone on near-black — stage        */
+/* direction, not dialog bubble.                                          */
+
+.scatter-desktop-text {
+    font-family: 'Inter', sans-serif;
+    font-size: 36px;
+    font-weight: 300;
+    color: #f5f2ea;
+    letter-spacing: -0.01em;
+    line-height: 1.35;
+    text-shadow: 0 1px 24px rgba(0, 0, 0, 0.55);
 }
