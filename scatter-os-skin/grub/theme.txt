@@ -42,7 +42,7 @@ message-bg-color: "#0a0a0a"
     left = 0
     width = 100%
     align = "center"
-    color = "#00ff88"
+    color = "#5a5a5a"
     font = "DejaVu Sans Mono Bold 20"
     text = "small tech • local • yours"
 }

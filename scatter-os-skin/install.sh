@@ -78,7 +78,7 @@ if command -v update-grub >/dev/null 2>&1; then
 fi
 
 # ── /etc/issue + /etc/motd ────────────────────────────────────────────
-echo "[3/5] /etc/issue + /etc/motd"
+echo "[3/6] /etc/issue + /etc/motd"
 [ -f /etc/issue ] && [ ! -f /etc/issue.scatter-backup ] && cp /etc/issue /etc/issue.scatter-backup
 [ -f /etc/motd ]  && [ ! -f /etc/motd.scatter-backup  ] && cp /etc/motd  /etc/motd.scatter-backup
 cp -f "$HERE/etc/issue" /etc/issue
@@ -86,7 +86,7 @@ cp -f "$HERE/etc/motd"  /etc/motd
 
 # ── hostname ──────────────────────────────────────────────────────────
 if [ "$SET_HOSTNAME" -eq 1 ]; then
-    echo "[4/5] hostname → scatter"
+    echo "[4/6] hostname → scatter"
     hostnamectl set-hostname scatter
     # Keep /etc/hosts consistent so sudo doesn't warn
     if ! grep -q "127.0.1.1.*scatter" /etc/hosts; then
@@ -97,13 +97,13 @@ if [ "$SET_HOSTNAME" -eq 1 ]; then
         fi
     fi
 else
-    echo "[4/5] hostname: skipped (pass --hostname to set it to 'scatter')"
+    echo "[4/6] hostname: skipped (pass --hostname to set it to 'scatter')"
 fi
 
 # ── OS identity (os-release, lsb-release, issue.net, grub distributor) ─
 # Same pattern Pop!_OS / Zorin / SteamOS use: own NAME/ID, keep ID_LIKE
 # so apt/snap/third-party installers still recognize the Ubuntu base.
-echo "[5/5] OS identity → Scatter OS"
+echo "[5/6] OS identity → Scatter OS"
 
 [ -f /etc/os-release ]  && [ ! -f /etc/os-release.scatter-backup ]  && cp /etc/os-release  /etc/os-release.scatter-backup
 [ -f /etc/lsb-release ] && [ ! -f /etc/lsb-release.scatter-backup ] && cp /etc/lsb-release /etc/lsb-release.scatter-backup
@@ -148,6 +148,47 @@ else
 fi
 if command -v update-grub >/dev/null 2>&1; then
     update-grub
+fi
+
+# ── GDM greeter ───────────────────────────────────────────────────────
+# Scatter distributor logo + dark greeter + non-orange accent, applied
+# via dconf so it's reversible and doesn't touch upstream Yaru files.
+echo "[6/6] GDM greeter → Scatter"
+GDM_SRC="$HERE/gdm"
+if [ -f "$GDM_SRC/greeter-logo.png" ] && [ -f "$GDM_SRC/90-scatter" ]; then
+    install -d /usr/share/scatter
+    install -m 0644 "$GDM_SRC/greeter-logo.png" /usr/share/scatter/greeter-logo.png
+
+    install -d /etc/dconf/db/gdm.d
+    install -m 0644 "$GDM_SRC/90-scatter" /etc/dconf/db/gdm.d/90-scatter
+
+    # Drop the user avatar for the caller (who ran `sudo bash install.sh`).
+    TARGET_USER="${SUDO_USER:-}"
+    if [ -n "$TARGET_USER" ] && [ -f "$GDM_SRC/avatar.png" ]; then
+        install -d /var/lib/AccountsService/icons
+        install -m 0644 "$GDM_SRC/avatar.png" "/var/lib/AccountsService/icons/$TARGET_USER"
+        # AccountsService user file points at the icon; write it if missing.
+        ACCT="/var/lib/AccountsService/users/$TARGET_USER"
+        if [ ! -f "$ACCT" ]; then
+            cat > "$ACCT" <<EOF
+[User]
+Icon=/var/lib/AccountsService/icons/$TARGET_USER
+SystemAccount=false
+EOF
+        else
+            if grep -q '^Icon=' "$ACCT"; then
+                sed -i "s|^Icon=.*|Icon=/var/lib/AccountsService/icons/$TARGET_USER|" "$ACCT"
+            else
+                echo "Icon=/var/lib/AccountsService/icons/$TARGET_USER" >> "$ACCT"
+            fi
+        fi
+    fi
+
+    if command -v dconf >/dev/null 2>&1; then
+        dconf update
+    fi
+else
+    echo "  (skipped — run generate_assets.py first, then re-run)"
 fi
 
 echo ""

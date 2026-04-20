@@ -5,14 +5,15 @@ from pathlib import Path
 from PIL import Image, ImageDraw, ImageFont
 
 BLACK = (10, 10, 10)
-GREEN = (0, 255, 136)
-AMBER = (255, 184, 0)
-TEXT  = (200, 200, 208)
-MUTED = (90, 90, 110)
+AMBER = (255, 184, 0)   # scatter-amber — single accent per surface
+BONE  = (245, 242, 234) # scatter-bone — wordmark, eyes, primary mark
+TEXT  = (200, 200, 208) # scatter-body — outlines, secondary mark
+MUTED = (90, 90, 110)   # scatter-quiet — footers, whispers
 
 HERE = Path(__file__).resolve().parent
 PLY  = HERE / "plymouth"
 GRUB = HERE / "grub"
+GDM  = HERE / "gdm"
 
 
 def font(size: int):
@@ -34,15 +35,15 @@ def draw_pixel_face(d: ImageDraw.ImageDraw, cx: int, cy: int, s: int):
     cell(-9, -4, TEXT); cell(-9, 4, TEXT)
     for y in range(-3, 4): cell(7, y, TEXT)
     cell(8, -4, TEXT); cell(8, 4, TEXT)
-    # eyes (outlined + green pupil)
+    # eyes (outlined + bone pupil)
     for x, y in [(-6,-3),(-5,-3),(-4,-3),(-3,-3),(-6,2),(-5,2),(-4,2),(-3,2),(-6,-2),(-6,-1),(-6,0),(-6,1),(-3,-2),(-3,-1),(-3,0),(-3,1)]:
         cell(x, y, TEXT)
     for x, y in [(-5,-2),(-4,-2),(-5,-1),(-4,-1),(-5,0),(-4,0),(-5,1),(-4,1)]:
-        cell(x, y, GREEN)
+        cell(x, y, BONE)
     for x, y in [(1,-3),(2,-3),(3,-3),(4,-3),(1,2),(2,2),(3,2),(4,2),(1,-2),(1,-1),(1,0),(1,1),(4,-2),(4,-1),(4,0),(4,1)]:
         cell(x, y, TEXT)
     for x, y in [(2,-2),(3,-2),(2,-1),(3,-1),(2,0),(3,0),(2,1),(3,1)]:
-        cell(x, y, GREEN)
+        cell(x, y, BONE)
     # mouth dot
     cell(-1, 5, AMBER); cell(0, 5, AMBER)
 
@@ -63,7 +64,7 @@ def splash(w=1920, h=1080, with_tagline=True):
     f_small = font(28)
     word = "SCATTER"
     tw = d.textlength(word, font=f_big)
-    d.text(((w - tw) / 2, h // 2 + 80), word, font=f_big, fill=GREEN)
+    d.text(((w - tw) / 2, h // 2 + 80), word, font=f_big, fill=BONE)
     if with_tagline:
         tag = "the alignment OS"
         tw2 = d.textlength(tag, font=f_tag)
@@ -74,7 +75,7 @@ def splash(w=1920, h=1080, with_tagline=True):
     return img
 
 
-def progress_dot(size=32, color=GREEN):
+def progress_dot(size=32, color=BONE):
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
     # pixel square dot (not round)
@@ -99,21 +100,39 @@ def main():
     f = font(100)
     word = "SCATTER"
     tw = d.textlength(word, font=f)
-    d.text(((800 - tw) / 2, 260), word, font=f, fill=GREEN)
+    d.text(((800 - tw) / 2, 260), word, font=f, fill=BONE)
     logo.save(PLY / "logo.png")
 
     # Progress dots for plymouth
-    progress_dot(32, GREEN).save(PLY / "dot.png")
+    progress_dot(32, BONE).save(PLY / "dot.png")
     progress_dot(32, AMBER).save(PLY / "dot-amber.png")
 
     # GRUB asset: simple 2-tone button for selection
     btn = Image.new("RGBA", (480, 64), (0, 0, 0, 0))
     bd = ImageDraw.Draw(btn)
-    bd.rectangle((0, 0, 479, 63), outline=GREEN + (255,), width=2)
-    bd.rectangle((0, 0, 3, 63), fill=GREEN + (255,))
+    bd.rectangle((0, 0, 479, 63), outline=AMBER + (255,), width=2)
+    bd.rectangle((0, 0, 3, 63), fill=AMBER + (255,))
     btn.save(GRUB / "select_bg.png")
 
-    print("assets written to", PLY, "and", GRUB)
+    # GDM distributor logo — small, restrained, single-accent.
+    # Shown at the bottom of the greeter. Replaces the Ubuntu orange square.
+    GDM.mkdir(parents=True, exist_ok=True)
+    greeter = Image.new("RGBA", (480, 120), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(greeter)
+    draw_pixel_face(gd, cx=80, cy=60, s=4)
+    f = font(44)
+    word = "SCATTER"
+    tw = gd.textlength(word, font=f)
+    gd.text((140, 36), word, font=f, fill=BONE)
+    greeter.save(GDM / "greeter-logo.png")
+
+    # User avatar — HZL face on ink square, 256px (AccountsService standard).
+    avatar = Image.new("RGBA", (256, 256), BLACK + (255,))
+    ad = ImageDraw.Draw(avatar)
+    draw_pixel_face(ad, cx=128, cy=128, s=8)
+    avatar.save(GDM / "avatar.png")
+
+    print("assets written to", PLY, ",", GRUB, "and", GDM)
 
 
 if __name__ == "__main__":

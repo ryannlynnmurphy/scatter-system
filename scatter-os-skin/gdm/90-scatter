@@ -1,0 +1,27 @@
+# Scatter greeter overrides — installed to /etc/dconf/db/gdm.d/90-scatter
+# After install, run: dconf update
+# These settings apply to the GDM greeter session only.
+
+[org/gnome/desktop/interface]
+# Dark greeter — align to Scatter ink
+color-scheme='prefer-dark'
+# Closest named accent to scatter-amber #ffb800. Yaru-yellow is not exact
+# but gets us out of Ubuntu orange. Further refinement requires a custom
+# gnome-shell theme gresource.
+accent-color='yellow'
+gtk-theme='Yaru-dark'
+icon-theme='Yaru'
+cursor-theme='Yaru'
+
+[org/gnome/desktop/background]
+picture-options='none'
+primary-color='#0a0a0a'
+secondary-color='#0a0a0a'
+
+[org/gnome/login-screen]
+# Scatter distributor mark — replaces Ubuntu orange logo.
+logo='/usr/share/scatter/greeter-logo.png'
+# Keep user list (ryannlynnmurphy is the only account); disabling would
+# force "not listed?" flow every login.
+disable-user-list=false
+banner-message-enable=false
