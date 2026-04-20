@@ -254,11 +254,16 @@ def _humanize_ollama_error(exc, model_name):
     return exc
 
 
-def ollama_generate(messages):
-    """Call Ollama (build model) and return the full response. Logs watts."""
+def ollama_generate(messages, model=None):
+    """Call Ollama and return the full response. Logs watts.
+
+    `model` defaults to the build model. Pass FAST_MODEL or another tag
+    to route to a smaller/larger one. Used by both /build and the
+    artifact generator."""
     import time
+    use_model = model or MODEL
     payload = {
-        "model": MODEL,
+        "model": use_model,
         "messages": messages,
         "stream": False,
         "options": {"num_ctx": 16384, "temperature": 0.3},
@@ -275,16 +280,16 @@ def ollama_generate(messages):
             result = json.loads(resp.read())
     except (HTTPError, URLError) as e:
         sc.watts_log(
-            source=f"model:{MODEL}",
-            joules=_watts_estimate(MODEL, time.monotonic() - t0),
+            source=f"model:{use_model}",
+            joules=_watts_estimate(use_model, time.monotonic() - t0),
             duration_s=time.monotonic() - t0,
         )
-        raise _humanize_ollama_error(e, MODEL) from e
+        raise _humanize_ollama_error(e, use_model) from e
     duration = time.monotonic() - t0
     tokens = int(result.get("prompt_eval_count", 0)) + int(result.get("eval_count", 0))
     sc.watts_log(
-        source=f"model:{MODEL}",
-        joules=_watts_estimate(MODEL, duration),
+        source=f"model:{use_model}",
+        joules=_watts_estimate(use_model, duration),
         duration_s=duration,
         tokens=tokens,
     )
@@ -627,45 +632,75 @@ class StudioHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json({"mode": "chat", "reply": reply, "status": "ok"})
                 return
 
-            # Build path
+            # Build path. Subtype is a typed contract (note/reference/lesson)
+            # that qwen fills in as JSON; the server renders to a consistent
+            # dark Scatter card. Falls back to legacy free-form HTML if the
+            # caller passes subtype="freeform" or an unknown value.
+            subtype = (data.get("subtype") or "note").strip().lower()
+            try:
+                from . import artifacts as artifacts_mod
+            except Exception:
+                import importlib.util as _iu
+                _p = os.path.join(os.path.dirname(__file__), "artifacts.py")
+                _spec = _iu.spec_from_file_location("scatter_artifacts", _p)
+                artifacts_mod = _iu.module_from_spec(_spec)
+                _spec.loader.exec_module(artifacts_mod)
+
+            if subtype in artifacts_mod.SUBTYPES:
+                try:
+                    html = artifacts_mod.generate(
+                        subtype, user_message, ollama_generate, MODEL,
+                    )
+                except RuntimeError as e:
+                    sc.journal_append(
+                        "build_error",
+                        session=session_id,
+                        prompt=user_message,
+                        subtype=subtype,
+                        error=str(e),
+                    )
+                    self.send_json({"error": str(e), "status": "error"})
+                    return
+                session["current_html"] = html
+                session["history"].append({
+                    "timestamp": datetime.datetime.now().isoformat(),
+                    "prompt": user_message,
+                    "subtype": subtype,
+                })
+                sc.journal_append(
+                    "build",
+                    session=session_id,
+                    prompt=user_message,
+                    subtype=subtype,
+                    html_bytes=len(html),
+                )
+                self.send_json({"mode": "build", "html": html,
+                                "subtype": subtype, "status": "ok"})
+                return
+
+            # Legacy freeform path (kept for clients that pass subtype="freeform").
             if has_existing:
                 context_msg = f"The current creation is the HTML I last produced. The user wants to modify it. User says: {user_message}"
             else:
                 context_msg = user_message
-
             session["messages"].append({"role": "user", "content": context_msg})
-
-            # Keep conversation manageable
             if len(session["messages"]) > 20:
                 session["messages"] = session["messages"][:1] + session["messages"][-10:]
-
             try:
                 response = ollama_generate(session["messages"])
                 html = extract_html(response)
-
                 session["messages"].append({"role": "assistant", "content": response})
                 session["current_html"] = html
                 session["history"].append({
                     "timestamp": datetime.datetime.now().isoformat(),
                     "prompt": user_message,
                 })
-
-                sc.journal_append(
-                    "build",
-                    session=session_id,
-                    prompt=user_message,
-                    html_bytes=len(html),
-                )
-
+                sc.journal_append("build", session=session_id, prompt=user_message,
+                                  html_bytes=len(html))
                 self.send_json({"mode": "build", "html": html, "status": "ok"})
-
             except Exception as e:
-                sc.journal_append(
-                    "build_error",
-                    session=session_id,
-                    prompt=user_message,
-                    error=str(e),
-                )
+                sc.journal_append("build_error", session=session_id,
+                                  prompt=user_message, error=str(e))
                 self.send_json({"error": str(e), "status": "error"})
 
         elif self.path == "/save":
@@ -919,6 +954,32 @@ body {
 .mode-chip[data-mode="build"].active {
     background: #ffb800;
     border-color: #ffb800;
+}
+
+.subtype-switch {
+    display: flex;
+    gap: 4px;
+    padding: 0 20px 8px;
+    font-size: 0.65rem;
+    letter-spacing: 0.06em;
+}
+.subtype-switch[hidden] { display: none; }
+.sub-chip {
+    background: transparent;
+    border: 1px solid transparent;
+    color: #5a5a6e;
+    font-family: inherit;
+    font-size: inherit;
+    letter-spacing: inherit;
+    padding: 3px 10px;
+    cursor: pointer;
+    text-transform: lowercase;
+    transition: color 120ms ease, border-color 120ms ease;
+}
+.sub-chip:hover { color: #c8c8d0; }
+.sub-chip.active {
+    color: #ffb800;
+    border-color: rgba(255, 184, 0, 0.4);
 }
 
 .composer {
@@ -1404,6 +1465,11 @@ body {
         <button class="mode-chip active" id="mode-chat" data-mode="chat" onclick="setMode('chat')" role="tab" aria-selected="true">chat</button>
         <button class="mode-chip" id="mode-build" data-mode="build" onclick="setMode('build')" role="tab" aria-selected="false">build</button>
     </div>
+    <div class="subtype-switch" id="subtype-switch" hidden role="tablist" aria-label="artifact type">
+        <button class="sub-chip active" data-subtype="note" onclick="setSubtype('note')" role="tab" aria-selected="true">note</button>
+        <button class="sub-chip" data-subtype="reference" onclick="setSubtype('reference')" role="tab" aria-selected="false">reference</button>
+        <button class="sub-chip" data-subtype="lesson" onclick="setSubtype('lesson')" role="tab" aria-selected="false">lesson</button>
+    </div>
     <form class="composer" onsubmit="event.preventDefault(); send();">
         <input id="chat-input" type="text" placeholder="say something" autocomplete="off" autofocus>
         <button class="btn" id="send-btn" type="submit" aria-label="send">↵</button>
@@ -1451,6 +1517,7 @@ const stream = document.getElementById('stream');
 const streamEmpty = document.getElementById('stream-empty');
 const sendBtn = document.getElementById('send-btn');
 let currentMode = 'chat';
+let currentSubtype = 'note';
 
 function setMode(m) {
     if (m !== 'chat' && m !== 'build') return;
@@ -1460,7 +1527,28 @@ function setMode(m) {
         el.classList.toggle('active', on);
         el.setAttribute('aria-selected', on ? 'true' : 'false');
     });
-    input.placeholder = m === 'build' ? 'describe what to build' : 'say something';
+    const subSwitch = document.getElementById('subtype-switch');
+    if (subSwitch) subSwitch.hidden = (m !== 'build');
+    if (m === 'build') {
+        const placeholders = { note: 'what to research', reference: 'what to define', lesson: 'what to teach' };
+        input.placeholder = placeholders[currentSubtype] || 'describe what to build';
+    } else {
+        input.placeholder = 'say something';
+    }
+}
+
+function setSubtype(s) {
+    if (!['note', 'reference', 'lesson'].includes(s)) return;
+    currentSubtype = s;
+    document.querySelectorAll('.sub-chip').forEach(el => {
+        const on = el.dataset.subtype === s;
+        el.classList.toggle('active', on);
+        el.setAttribute('aria-selected', on ? 'true' : 'false');
+    });
+    if (currentMode === 'build') {
+        const placeholders = { note: 'what to research', reference: 'what to define', lesson: 'what to teach' };
+        input.placeholder = placeholders[s];
+    }
 }
 const statusDot = document.getElementById('status-dot');
 const statusText = document.getElementById('status-text');
@@ -1625,7 +1713,11 @@ async function send() {
         const resp = await fetch('/build', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: text, mode: currentMode })
+            body: JSON.stringify({
+                message: text,
+                mode: currentMode,
+                subtype: currentMode === 'build' ? currentSubtype : undefined,
+            })
         });
         const data = await resp.json();
 
