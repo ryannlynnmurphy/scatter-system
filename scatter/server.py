@@ -1453,7 +1453,7 @@ body {
 
 <aside class="rail">
     <div class="rail-head">
-        <span id="scatter-face" class="scatter-face">(◉.◉)</span>
+        <span id="scatter-face" class="scatter-face">&gt;.&lt;</span>
         <span class="wordmark">SCATTER</span>
         <button class="mode-toggle" id="mode-toggle" title="data leaves the machine only when you say so" onclick="toggleMode()">
             <span class="mode-dot"></span>
@@ -1608,9 +1608,9 @@ fetch('/mode').then(r => r.json()).then(d => renderMode(d.online)).catch(() => {
 // States rank from visible-priority high to low:
 //   error > building > thinking > online > sleeping > idle
 let FACES = {
-    idle: '(◉.◉)', thinking: '(●_●)', building: '(●.●)',
-    curious: '(◎.◎)', happy: '(◉·◉)', online: '(◉.◉)',
-    sleeping: '(-.-)', error: '(╳.╳)', winking: '(●.◉)'
+    idle: '>.<', ready: '>.<', thinking: '>-<', building: '>=<',
+    curious: '>O<', happy: '>·<', online: '>O<',
+    sleeping: '>_<', error: '>x<', winking: '>!<'
 };
 let currentFaceState = 'idle';
 const scatterFace = document.getElementById('scatter-face');

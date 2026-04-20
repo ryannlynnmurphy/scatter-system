@@ -1,0 +1,77 @@
+/* Scatter Design System — tokens.
+ *
+ * Single source of truth for colors, type, spacing, radius, motion.
+ * Every Scatter surface (shell extension, web UIs, app chrome) must reference
+ * these values. When a token changes here, every surface must be updated.
+ *
+ * Copy into GNOME Shell extension stylesheets as inline values — GNOME Shell
+ * CSS does not support @import or :root variables reliably.
+ */
+
+:root {
+    /* ── Palette ──────────────────────────────────────────────────────── */
+    --scatter-black:       #0a0a0a;   /* true black, reserved for bar + boot */
+    --scatter-ink:         #121212;   /* near-black body surface */
+    --scatter-graphite:    #1a1a1a;   /* elevated surface */
+    --scatter-slate:       #2a2a2a;   /* borders, dividers */
+    --scatter-quiet:       #5a5a5a;   /* low-emphasis text */
+    --scatter-body:        #c8c8c8;   /* body text, not pure white */
+    --scatter-bright:      #e5e5e5;   /* emphasis text */
+    --scatter-bone:        #f5f2ea;   /* paper-white, used sparingly */
+
+    --scatter-amber:       #ffb800;   /* iconic accent — used once per surface */
+    --scatter-amber-dim:   #8a6200;
+    --scatter-amber-wash:  rgba(255, 184, 0, 0.08);
+
+    /* ── Typography ───────────────────────────────────────────────────── */
+    --scatter-display:     'Inter Display', 'Inter', system-ui, sans-serif;
+    --scatter-body-font:   'Inter', system-ui, sans-serif;
+    --scatter-mono:        'JetBrains Mono', 'Victor Mono', monospace;
+    --scatter-glyph:       'JetBrains Mono', 'Victor Mono', monospace;
+
+    --scatter-type-xs:     10px;   /* labels, route badges */
+    --scatter-type-sm:     12px;   /* captions */
+    --scatter-type-base:   14px;   /* body, bar input */
+    --scatter-type-md:     16px;
+    --scatter-type-lg:     22px;
+    --scatter-type-xl:     36px;
+    --scatter-type-display: 64px;
+
+    --scatter-track-tight:    -0.01em;
+    --scatter-track-body:      0;
+    --scatter-track-caps:      0.08em;
+    --scatter-track-wide:      0.16em;
+
+    /* ── Spacing (4px baseline) ───────────────────────────────────────── */
+    --scatter-s-1:   4px;
+    --scatter-s-2:   8px;
+    --scatter-s-3:   12px;
+    --scatter-s-4:   16px;
+    --scatter-s-5:   24px;
+    --scatter-s-6:   32px;
+    --scatter-s-7:   48px;
+    --scatter-s-8:   64px;
+
+    /* ── Radius ───────────────────────────────────────────────────────── */
+    /* Scatter uses two radii. No rounded-everything. */
+    --scatter-radius-sharp:  0px;    /* default — editorial, not ornamental */
+    --scatter-radius-soft:   2px;    /* inputs and pickable objects only */
+
+    /* ── Borders ──────────────────────────────────────────────────────── */
+    --scatter-border:       1px solid rgba(255, 255, 255, 0.08);
+    --scatter-border-hover: 1px solid rgba(255, 255, 255, 0.18);
+    --scatter-border-focus: 1px solid #ffb800;
+
+    /* ── Motion ───────────────────────────────────────────────────────── */
+    /* Durational, not snappy. Motion is composed, not reactive. */
+    --scatter-ease:         cubic-bezier(0.2, 0.8, 0.2, 1);
+    --scatter-dur-fast:     120ms;
+    --scatter-dur-base:     220ms;
+    --scatter-dur-slow:     420ms;
+    --scatter-dur-hold:     800ms;
+
+    /* ── Dimensions ───────────────────────────────────────────────────── */
+    --scatter-bar-height:   44px;
+    --scatter-icon:         20px;
+    --scatter-icon-lg:      24px;
+}

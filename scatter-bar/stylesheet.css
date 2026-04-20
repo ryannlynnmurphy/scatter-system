@@ -1,52 +1,155 @@
-/* Scatter Bar — input popup from the top panel. Matches the web UI register. */
+/* Scatter Bar — the bottom of the machine.
+ *
+ * Composition, not chrome. No visible boxes. One hairline at the top.
+ * The bar IS the prompt: >-< on the left, typed text across the middle,
+ * APPS at the right. Clicks land; borders don't.
+ *
+ * Token values mirror ~/scatter-system/scatter-design-system/.
+ */
 
-.scatter-bar-trigger {
-    font-family: 'JetBrains Mono', 'Victor Mono', 'Ubuntu Mono', monospace;
-    font-size: 11px;
-    color: #ffb800;
-    padding: 0 10px;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+/* ── Bar ──────────────────────────────────────────────────────────────── */
+
+.scatter-bar {
+    background-color: #0a0a0a;
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding: 0 40px;
+    spacing: 20px;
 }
 
-.scatter-bar-item {
-    padding: 12px 14px;
-}
-
-.scatter-bar-container {
-    spacing: 8px;
-    min-width: 480px;
+.scatter-bar-glyph {
+    font-family: 'JetBrains Mono', 'Victor Mono', monospace;
+    font-size: 28px;
+    font-weight: 500;
+    color: #c8c8c8;
+    letter-spacing: 0.04em;
+    padding-right: 4px;
 }
 
 .scatter-bar-entry {
-    font-family: 'Victor Mono', 'JetBrains Mono', monospace;
-    font-size: 13px;
-    font-style: italic;
-    color: #e5e5e5;
-    background-color: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 4px;
-    padding: 8px 10px;
+    font-family: 'Inter', sans-serif;
+    font-size: 22px;
+    font-weight: 400;
+    color: #f5f2ea;
+    background-color: transparent;
+    background-gradient-direction: none;
+    border: none;
+    border-radius: 0;
     caret-color: #ffb800;
+    caret-size: 2;
+    padding: 0;
+    min-width: 400px;
 }
 
 .scatter-bar-entry:focus {
-    border: 1px solid #ffb800;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
 }
 
-.scatter-bar-route {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10px;
+.scatter-bar-entry StLabel {
     color: #5a5a5a;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
+    font-style: normal;
+    font-weight: 400;
 }
 
-.scatter-bar-response {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 12px;
+.scatter-bar-entry:hover {
+    background-color: transparent;
+}
+
+/* APPS — tracked caps, clickable text, no button chrome. */
+
+.scatter-bar-apps {
+    font-family: 'Inter', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.24em;
+    color: #8a8a8a;
+    background-color: transparent;
+    background-gradient-direction: none;
+    border: none;
+    border-radius: 0;
+    padding: 0 16px;
+    min-height: 72px;
+    min-width: 80px;
+}
+.scatter-bar-apps:hover {
+    color: #ffb800;
+}
+.scatter-bar-apps:active {
+    color: #ffb800;
+    background-color: transparent;
+}
+
+/* ── Reveal: cascade of apps above the bar ─────────────────────────────── */
+
+.scatter-reveal {
+    background-color: #0a0a0a;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 0;
+    padding: 24px;
+    spacing: 20px;
+}
+
+.scatter-reveal-item {
+    background-color: transparent;
+    background-gradient-direction: none;
+    border: none;
+    border-radius: 0;
+    padding: 12px 20px;
+    min-width: 120px;
+    min-height: 96px;
+}
+.scatter-reveal-item:hover {
+    background-color: transparent;
+}
+.scatter-reveal-item:hover .scatter-reveal-glyph {
+    color: #ffb800;
+}
+.scatter-reveal-item:hover .scatter-reveal-label {
     color: #e5e5e5;
-    padding: 4px 0;
-    min-width: 480px;
-    max-width: 520px;
+}
+
+.scatter-reveal-glyph {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 32px;
+    font-weight: 500;
+    color: #c8c8c8;
+    text-align: center;
+    padding-bottom: 14px;
+}
+.scatter-reveal-label {
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.24em;
+    color: #8a8a8a;
+    text-align: center;
+}
+
+/* ── Response overlay ──────────────────────────────────────────────────── */
+
+.scatter-response {
+    background-color: #0a0a0a;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 0;
+    padding: 24px 32px;
+    spacing: 12px;
+}
+
+.scatter-response-route {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.24em;
+    color: #ffb800;
+}
+
+.scatter-response-text {
+    font-family: 'Inter', sans-serif;
+    font-size: 16px;
+    font-weight: 400;
+    color: #f5f2ea;
+    min-width: 640px;
+    max-width: 720px;
 }

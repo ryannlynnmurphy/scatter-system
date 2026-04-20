@@ -1,0 +1,99 @@
+/* Scatter Design System — buttons.
+ *
+ * One button spec. Every button in the OS must match this: shell chrome,
+ * web UIs (router, Studio), terminal wrappers, anything the user clicks.
+ *
+ * Rules:
+ *   - No drop shadows. No gradients. No rounded-everywhere.
+ *   - One accent color (amber) — used for the primary action only.
+ *   - Hover is a border shift, not a fill. Press is a dim wash.
+ *   - Typography: Inter (display), SemiBold, tracked caps for labels.
+ *   - 2px radius max. Editorial, not ornamental.
+ *
+ * This file is CSS for web surfaces. GNOME Shell extensions must mirror
+ * the values inline (GNOME CSS does not support variables reliably).
+ */
+
+.scatter-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+
+    height: 32px;
+    padding: 0 14px;
+
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 2px;
+
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+
+    color: #c8c8c8;
+
+    cursor: pointer;
+    user-select: none;
+    transition: color 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                border-color 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+                background-color 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.scatter-btn:hover {
+    color: #e5e5e5;
+    border-color: rgba(255, 255, 255, 0.20);
+}
+
+.scatter-btn:active {
+    background-color: rgba(255, 255, 255, 0.04);
+    color: #ffffff;
+}
+
+.scatter-btn:focus-visible {
+    outline: none;
+    border-color: #ffb800;
+}
+
+.scatter-btn[disabled],
+.scatter-btn:disabled {
+    color: #5a5a5a;
+    border-color: rgba(255, 255, 255, 0.06);
+    cursor: not-allowed;
+}
+
+/* Primary — amber outline. Reserved for the main action on a surface.
+ * Never more than one primary button per view. */
+.scatter-btn--primary {
+    border-color: #ffb800;
+    color: #ffb800;
+}
+.scatter-btn--primary:hover {
+    background-color: rgba(255, 184, 0, 0.08);
+    color: #ffb800;
+}
+.scatter-btn--primary:active {
+    background-color: rgba(255, 184, 0, 0.14);
+}
+
+/* Ghost — used for inline actions inside a denser surface. Same spec,
+ * thinner border. */
+.scatter-btn--ghost {
+    border-color: transparent;
+    padding: 0 10px;
+}
+.scatter-btn--ghost:hover {
+    border-color: rgba(255, 255, 255, 0.10);
+}
+
+/* Icon-only — square, used for glyph buttons. */
+.scatter-btn--icon {
+    width: 32px;
+    padding: 0;
+    justify-content: center;
+}
+
+/* Size variants — use sparingly. */
+.scatter-btn--sm { height: 24px; padding: 0 10px; font-size: 10px; }
+.scatter-btn--lg { height: 40px; padding: 0 20px; font-size: 13px; }

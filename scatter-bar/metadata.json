@@ -1,9 +1,9 @@
 {
   "uuid": "scatter-bar@scattercomputing.org",
   "name": "Scatter Bar",
-  "description": "Top-bar input to Scatter router. Click to open, type, press Enter, see route + response. Talks to the local FastAPI router at http://127.0.0.1:8787.",
+  "description": "The iconic bottom bar of Scatter OS. Always-visible prompt, peek-reveal apps, pinned corner shortcut, Action modality wired. Talks to the local router at 127.0.0.1:8787.",
   "shell-version": ["45", "46", "47"],
-  "version": 1,
-  "url": "https://github.com/ryannlynnmurphy/scatter",
+  "version": 2,
+  "url": "https://github.com/ryannlynnmurphy/scatter-system",
   "settings-schema": null
 }

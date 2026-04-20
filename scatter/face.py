@@ -1,15 +1,22 @@
-"""Scatter face — the (◉.◉) mascot with emotional range.
+"""Scatter face — the >.< glyph with emotional range.
 
 One vocabulary, one source of truth. Every Scatter surface that renders a face
 pulls from here so idle, thinking, online, sleeping, error etc. are consistent
 across the chat header, the wallpaper, the terminal prompt, and future chrome.
 
+The face is a function expression: >state<. Outer characters are always the
+redirect arrows (`>`, `<`) — code-shaped, terminal-shaped. The state lives
+in the middle character. ASCII keyboard glyphs only — no fancy unicode.
+This is on purpose: the face IS code, not a mascot.
+
 Rules (anti-slop):
-  1. EYES are always in the circle family: ◉ ● ○ ◎ ╳
-  2. MOUTH is always minimal punctuation: . _ · — o !
-  3. Emotional states that are about MODE (online, offline) change COLOR
-     of a constant face, not the glyph. Glyph changes are reserved for
-     activity (thinking, sleeping, error).
+  1. Outer eyes are always `>` then `<` — angle brackets, redirect-shaped.
+  2. Middle is one of:  . - = ! O _ x ·
+       . idle / quiet     - working / line       = producing / equals
+       ! alert            O open / signaling     _ dropped / sleeping
+       x broken           · light / smaller
+  3. State changes that are about MODE (online vs offline) change COLOR
+     of the glyph, not the bracket frame.
   4. No kaomoji. No decorative unicode. No ᵕ, ω, ᗕ, etc.
 
 A face that violates these rules is slop — the validator at the bottom of
@@ -17,25 +24,25 @@ this module catches it at import time.
 """
 
 # Glyph vocabulary — the only characters allowed in a Scatter face.
-# Lowercase x is the "broken/dead eye" family — smaller and cuter than ╳.
-_EYES  = set("◉●○◎x")
-_MOUTH = set(". _·—o")
+_LEFT  = ">"
+_RIGHT = "<"
+_MIDDLE = set(".-=!O_x·")
 
 FACES = {
-    # state      face         # meaning
-    "idle":     "(◉.◉)",      # default, awake, neutral
-    "ready":    "(◉.◉)",      # same as idle — mode ≠ glyph
-    "thinking": "(●_●)",      # eyes focused, mouth pensive
-    "building": "(●.●)",      # focused, narrower eyes, steady mouth
-    "curious":  "(◎.◎)",      # wide eyes, open mouth-dot
-    "happy":    "(◉·◉)",      # same eyes as idle, smaller mouth = lightness
-    "online":   "(◉.◉)",      # glyph identical to idle; render in amber
-    "sleeping": "(○—○)",      # empty eyes, flat mouth
-    "error":    "(x.x)",      # small, cute, dead — not aggressive
-    "winking":  "(●.◉)",      # one focused, one open — circle family only
+    # state      face       # meaning
+    "idle":     ">.<",      # default, awake, quiet
+    "ready":    ">.<",      # same as idle — mode ≠ glyph
+    "thinking": ">-<",      # line through, working
+    "building": ">=<",      # equals — producing output
+    "curious":  ">O<",      # open eye outward, taking in
+    "happy":    ">·<",      # smaller mid-dot, lighter
+    "online":   ">O<",      # alert, signaling out (rendered amber)
+    "sleeping": ">_<",      # dropped, baseline
+    "error":    ">x<",      # broken
+    "winking":  ">!<",      # alert, punctuating
 }
 
-# Color tokens (hex) — the eye/glyph color for each state.
+# Color tokens (hex) — the glyph color for each state.
 # idle and ready are green; online flips to amber so mode is visually loud.
 EYE_COLOR = {
     "idle":     "#00ff88",
@@ -67,20 +74,16 @@ def eye_color(state: str = "idle") -> str:
 def _detect_slop():
     problems = []
     for name, f in FACES.items():
-        if not (f.startswith("(") and f.endswith(")")):
-            problems.append(f"{name}: {f!r} must be wrapped in ()")
+        if len(f) != 3:
+            problems.append(f"{name}: {f!r} must be exactly 3 chars (>state<), got {len(f)}")
             continue
-        inner = f[1:-1]
-        if len(inner) != 3:
-            problems.append(f"{name}: {f!r} inner must be exactly 3 chars, got {len(inner)}")
-            continue
-        left, mouth, right = inner[0], inner[1], inner[2]
-        if left not in _EYES:
-            problems.append(f"{name}: left eye {left!r} not in canon {sorted(_EYES)}")
-        if right not in _EYES:
-            problems.append(f"{name}: right eye {right!r} not in canon {sorted(_EYES)}")
-        if mouth not in _MOUTH:
-            problems.append(f"{name}: mouth {mouth!r} not in canon {sorted(_MOUTH)}")
+        left, mid, right = f[0], f[1], f[2]
+        if left != _LEFT:
+            problems.append(f"{name}: left {left!r} must be {_LEFT!r}")
+        if right != _RIGHT:
+            problems.append(f"{name}: right {right!r} must be {_RIGHT!r}")
+        if mid not in _MIDDLE:
+            problems.append(f"{name}: middle {mid!r} not in canon {sorted(_MIDDLE)}")
     if problems:
         raise ValueError("Scatter face slop detected:\n  " + "\n  ".join(problems))
 
