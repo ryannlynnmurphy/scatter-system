@@ -301,6 +301,25 @@ Never output HTML, never output code blocks. Genuine, approachable, warm.
 If the user seems to want to make something, ask them one clarifying question."""
 
 
+def _seed_chat_history_from_journal(n_pairs: int = 6) -> list:
+    """Pull the most recent chat turns from the journal so Scatter remembers
+    across restarts. Returns a list of role messages ready for chat_reply's
+    history param. Never raises — missing journal = empty history."""
+    try:
+        entries = sc.journal_read(kind="chat", limit=n_pairs)
+    except Exception:
+        return []
+    seeded = []
+    for e in entries:
+        u = (e.get("user_message") or "").strip()
+        r = (e.get("reply") or "").strip()
+        if u:
+            seeded.append({"role": "user", "content": u})
+        if r:
+            seeded.append({"role": "assistant", "content": r})
+    return seeded
+
+
 def chat_reply(user_message, history=None):
     """Short conversational reply from FAST_MODEL. No HTML, no code.
 
@@ -581,7 +600,7 @@ class StudioHandler(http.server.BaseHTTPRequestHandler):
                     "messages": [{"role": "system", "content": STUDIO_SYSTEM}],
                     "current_html": EMPTY_PREVIEW,
                     "history": [],
-                    "chat_history": [],
+                    "chat_history": _seed_chat_history_from_journal(),
                 }
             session = sessions[session_id]
             session.setdefault("chat_history", [])
@@ -1443,6 +1462,15 @@ body {
     50% { opacity: 0.3; }
 }
 
+.inspector-note {
+    padding: 0 20px 14px;
+    font-size: 0.72rem;
+    color: #5a5a6e;
+    line-height: 1.5;
+    font-style: normal;
+    letter-spacing: -0.005em;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -1461,27 +1489,13 @@ body {
         </button>
     </div>
 
-    <div class="mode-switch" role="tablist" aria-label="mode">
-        <button class="mode-chip active" id="mode-chat" data-mode="chat" onclick="setMode('chat')" role="tab" aria-selected="true">chat</button>
-        <button class="mode-chip" id="mode-build" data-mode="build" onclick="setMode('build')" role="tab" aria-selected="false">build</button>
+    <div class="inspector-note">
+        Scatter's journal. The bar at the bottom of the screen is how you talk.
     </div>
-    <div class="subtype-switch" id="subtype-switch" hidden role="tablist" aria-label="artifact type">
-        <button class="sub-chip active" data-subtype="note" onclick="setSubtype('note')" role="tab" aria-selected="true">note</button>
-        <button class="sub-chip" data-subtype="reference" onclick="setSubtype('reference')" role="tab" aria-selected="false">reference</button>
-        <button class="sub-chip" data-subtype="lesson" onclick="setSubtype('lesson')" role="tab" aria-selected="false">lesson</button>
-    </div>
-    <form class="composer" onsubmit="event.preventDefault(); send();">
-        <input id="chat-input" type="text" placeholder="say something" autocomplete="off" autofocus>
-        <button class="btn" id="send-btn" type="submit" aria-label="send">↵</button>
-    </form>
 
     <nav class="subnav">
-        <button class="sub-link active" data-view="build" onclick="switchView('build')">build</button>
-        <button class="sub-link" data-view="journal" onclick="switchView('journal')">journal</button>
+        <button class="sub-link active" data-view="journal" onclick="switchView('journal')">journal</button>
         <button class="sub-link" data-view="audit" onclick="switchView('audit')">audit</button>
-        <span class="subnav-sep"></span>
-        <button class="sub-link" onclick="saveProject()">save</button>
-        <button class="sub-link" onclick="resetProject()">new</button>
     </nav>
 
     <div class="rail-foot">
@@ -1498,78 +1512,25 @@ body {
         <span><span class="status-dot" id="status-dot"></span><span id="status-text">ready</span></span>
         <!-- canvas: bubble badge removed -->
     </div>
-    <div class="view active" id="view-build">
-        <div class="stream" id="stream">
-            <div class="stream-empty" id="stream-empty">
-                <div class="stream-empty-glyph">•</div>
-                <div class="stream-empty-title">nothing yet</div>
-                <div class="stream-empty-sub">say what you want to see.</div>
-            </div>
-        </div>
-    </div>
-    <div class="view" id="view-journal"><div class="entry-list" id="journal-list"></div></div>
+    <div class="view active" id="view-journal"><div class="entry-list" id="journal-list"></div></div>
     <div class="view" id="view-audit"><div class="entry-list" id="audit-list"></div></div>
 </main>
 
 <script>
-const input = document.getElementById('chat-input');
-const stream = document.getElementById('stream');
-const streamEmpty = document.getElementById('stream-empty');
-const sendBtn = document.getElementById('send-btn');
-let currentMode = 'chat';
-let currentSubtype = 'note';
-
-function setMode(m) {
-    if (m !== 'chat' && m !== 'build') return;
-    currentMode = m;
-    document.querySelectorAll('.mode-chip').forEach(el => {
-        const on = el.dataset.mode === m;
-        el.classList.toggle('active', on);
-        el.setAttribute('aria-selected', on ? 'true' : 'false');
-    });
-    const subSwitch = document.getElementById('subtype-switch');
-    if (subSwitch) subSwitch.hidden = (m !== 'build');
-    if (m === 'build') {
-        const placeholders = { note: 'what to research', reference: 'what to define', lesson: 'what to teach' };
-        input.placeholder = placeholders[currentSubtype] || 'describe what to build';
-    } else {
-        input.placeholder = 'say something';
-    }
-}
-
-function setSubtype(s) {
-    if (!['note', 'reference', 'lesson'].includes(s)) return;
-    currentSubtype = s;
-    document.querySelectorAll('.sub-chip').forEach(el => {
-        const on = el.dataset.subtype === s;
-        el.classList.toggle('active', on);
-        el.setAttribute('aria-selected', on ? 'true' : 'false');
-    });
-    if (currentMode === 'build') {
-        const placeholders = { note: 'what to research', reference: 'what to define', lesson: 'what to teach' };
-        input.placeholder = placeholders[s];
-    }
-}
+// Inspector mode: this webkit is journal + audit + egress toggle only.
+// The prompt lives in the bar at the bottom of the screen.
 const statusDot = document.getElementById('status-dot');
 const statusText = document.getElementById('status-text');
-const bubbleBadge = document.getElementById('bubble-badge');
-const bubbleText = document.getElementById('bubble-text');
 
-// Health check. Badge reflects liveness only — never the underlying model name.
-// Machinery is invisible; the user only sees "in the bubble" or "offline".
+// Health check. The bubble badge was removed from the chrome, so we
+// only surface *problems* — silence is good news.
+let modelOnline = true;
 fetch('/health').then(r => r.json()).then(data => {
-    if (data.ollama === 'running' && data.models.length > 0) {
-        bubbleBadge.classList.remove('offline');
-        bubbleText.textContent = 'in the bubble';
-    } else {
-        bubbleBadge.classList.add('offline');
-        bubbleText.textContent = 'offline';
+    modelOnline = data.ollama === 'running' && data.models.length > 0;
+    if (!modelOnline) {
         addMessage("the local model isn't responding. in a terminal: ollama serve", 'error');
     }
-}).catch(() => {
-    bubbleBadge.classList.add('offline');
-    bubbleText.textContent = 'offline';
-});
+}).catch(() => { modelOnline = false; });
 
 // Egress mode — the conscious online/offline toggle. OFF by default
 // every boot. When ON, the header pill glows amber and no flow is
@@ -1627,153 +1588,8 @@ function setFace(state) {
 
 fetch('/face').then(r => r.json()).then(d => { FACES = d.faces; setFace('idle'); }).catch(() => {});
 
-input.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        send();
-    }
-});
-
-function addMessage(text, type = 'system') {
-    if (streamEmpty) streamEmpty.remove();
-    const div = document.createElement('div');
-    div.className = 'message ' + type;
-    const textNode = document.createElement('span');
-    textNode.className = 'message-text';
-    textNode.textContent = text;
-    div.appendChild(textNode);
-    if (type === 'chat' || type === 'system') {
-        const btn = document.createElement('button');
-        btn.className = 'speak-btn';
-        btn.title = 'speak';
-        btn.setAttribute('aria-label', 'speak this message');
-        btn.textContent = '▸';
-        btn.addEventListener('click', () => speakMessage(text, btn));
-        div.appendChild(btn);
-    }
-    stream.appendChild(div);
-    stream.scrollTop = stream.scrollHeight;
-}
-
-function addBuild(html) {
-    if (streamEmpty) streamEmpty.remove();
-    const card = document.createElement('div');
-    card.className = 'stream-build';
-    const iframe = document.createElement('iframe');
-    iframe.setAttribute('sandbox', 'allow-scripts allow-same-origin');
-    iframe.srcdoc = html;
-    card.appendChild(iframe);
-    stream.appendChild(card);
-    stream.scrollTop = stream.scrollHeight;
-}
-
-async function speakMessage(text, btn) {
-    if (btn.dataset.playing === '1') return;
-    btn.dataset.playing = '1';
-    const prior = btn.textContent;
-    btn.textContent = '•';
-    try {
-        const resp = await fetch('/speak', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text, prefer_local: !bubbleBadge.classList.contains('online') ? true : (btn.dataset.cloud === '1') }),
-        });
-        const ct = resp.headers.get('Content-Type') || '';
-        if (!resp.ok || ct.startsWith('application/json')) {
-            const err = await resp.json().catch(() => ({error: 'speak failed'}));
-            addMessage(err.error || 'speak failed', 'error');
-            return;
-        }
-        const blob = await resp.blob();
-        const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        audio.onended = () => URL.revokeObjectURL(url);
-        await audio.play();
-    } catch (e) {
-        addMessage('could not speak: ' + e.message, 'error');
-    } finally {
-        btn.textContent = prior;
-        btn.dataset.playing = '0';
-    }
-}
-
-async function send() {
-    const text = input.value.trim();
-    if (!text) return;
-
-    input.value = '';
-    sendBtn.disabled = true;
-    addMessage(text, 'user');
-
-    statusDot.classList.add('working');
-    statusText.textContent = 'reading';
-    setFace('thinking');
-
-    try {
-        const resp = await fetch('/build', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                message: text,
-                mode: currentMode,
-                subtype: currentMode === 'build' ? currentSubtype : undefined,
-            })
-        });
-        const data = await resp.json();
-
-        if (data.error) {
-            addMessage(data.error, 'error');
-            setFace('error');
-        } else if (data.mode === 'chat') {
-            addMessage(data.reply || '…', 'chat');
-            setFace('idle');
-        } else if (data.html) {
-            addBuild(data.html);
-            statusText.textContent = 'rendered';
-            setFace('building');
-        }
-    } catch (e) {
-        addMessage('the signal dropped. ' + e.message, 'error');
-        setFace('error');
-    }
-
-    sendBtn.disabled = false;
-    statusDot.classList.remove('working');
-    statusText.textContent = 'at rest';
-    // Return to idle / online depending on mode — respect current egress state
-    const modeToggleEl = document.getElementById('mode-toggle');
-    setFace(modeToggleEl && modeToggleEl.classList.contains('online') ? 'online' : 'idle');
-    input.focus();
-}
-
-async function saveProject() {
-    const name = prompt('Name your project:');
-    if (!name) return;
-    try {
-        const resp = await fetch('/save', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name })
-        });
-        const data = await resp.json();
-        if (data.saved) {
-            addMessage('Saved to ' + data.saved, 'system');
-        }
-    } catch (e) {
-        addMessage('Save failed: ' + e.message, 'error');
-    }
-}
-
-async function resetProject() {
-    if (!confirm('Start a new project? Current work will be lost unless saved.')) return;
-    await fetch('/reset', { method: 'POST' });
-    frame.src = '/preview';
-    messages.innerHTML = '';
-    addMessage('New project. What do you want to build?', 'system');
-}
-
 // ---------- view switching ----------
-let currentView = 'build';
+let currentView = 'journal';
 
 async function switchView(name) {
     currentView = name;
@@ -1950,8 +1766,8 @@ async function updateWatts() {
 updateWatts();
 setInterval(updateWatts, 5000);
 
-// Focus input on load
-input.focus();
+// Inspector opens on the journal — the prompt lives in the bar.
+loadJournal();
 </script>
 </body></html>"""
 

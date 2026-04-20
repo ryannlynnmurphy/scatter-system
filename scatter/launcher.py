@@ -87,9 +87,37 @@ def run_native() -> int:
         print("scatter server did not become ready — check ollama", file=sys.stderr)
         return 1
 
-    window = Gtk.Window(title="Scatter")
-    window.set_default_size(1200, 800)
+    window = Gtk.Window(title="Scatter · Journal")
+
+    # Size the window so the GNOME top bar (clock, Activities, system menu)
+    # is always reachable. Mutter auto-maximizes tall windows on small
+    # screens, so we clamp short enough that the top panel is guaranteed
+    # to stay visible above us. Wayland ignores client-side positioning —
+    # only the size is load-bearing.
+    # Size to the monitor's workarea — the rectangle that excludes the
+    # GNOME top bar and the Scatter bottom bar (both reserve struts).
+    # A small inset keeps the window from feeling glued to the edges.
+    display = Gdk.Display.get_default()
+    monitor = display.get_primary_monitor() or display.get_monitor(0)
+    if monitor is not None:
+        wa = monitor.get_workarea()
+        w = max(900, wa.width - 32)
+        h = max(600, wa.height - 24)
+        window.set_default_size(w, h)
+    else:
+        window.set_default_size(1200, 720)
     window.set_position(Gtk.WindowPosition.CENTER)
+    window.set_resizable(True)
+    window.set_type_hint(Gdk.WindowTypeHint.NORMAL)
+    window.set_decorated(True)
+
+    # Escape closes the window — no titlebar controls to lean on.
+    def _on_key(_w, event):
+        if event.keyval == Gdk.KEY_Escape:
+            _shutdown()
+            return True
+        return False
+    window.connect("key-press-event", _on_key)
 
     # Climate hacker: dark window background so there is no white flash
     # at startup before the web UI paints.
@@ -144,6 +172,9 @@ def run_native() -> int:
     GLib.unix_signal_add(GLib.PRIORITY_HIGH, signal.SIGTERM, _shutdown)
 
     window.show_all()
+    # Mutter may auto-maximize a large window on a small screen. Force it
+    # back to our requested size so the top panel stays reachable.
+    window.unmaximize()
     Gtk.main()
     return 0
 
