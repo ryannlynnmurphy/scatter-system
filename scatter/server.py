@@ -1496,7 +1496,7 @@ body {
 <main class="canvas">
     <div class="canvas-head">
         <span><span class="status-dot" id="status-dot"></span><span id="status-text">ready</span></span>
-        <span class="bubble-badge" id="bubble-badge"><span class="bubble-dot"></span><span id="bubble-text">in the bubble</span></span>
+        <!-- canvas: bubble badge removed -->
     </div>
     <div class="view active" id="view-build">
         <div class="stream" id="stream">
