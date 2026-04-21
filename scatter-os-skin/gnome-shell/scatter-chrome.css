@@ -1,0 +1,81 @@
+/* ══════════════════════════════════════════════════════════════════════
+   SCATTER CANVAS: TOP PANEL AS DATE + HOVER-REVEAL
+   Per register: top bar = just the date, small, centered; battery / wifi /
+   sound muted by default, bright on hover. The Activities pill and
+   workspace indicator are off-brand and hidden entirely.
+   Indicators stay reachable (accessibility) but stop advertising themselves.
+
+   This file is the SOURCE OF TRUTH for Scatter's panel chrome overrides.
+   It is appended to ~/.themes/Scatter/gnome-shell/gnome-shell.css by hand
+   (no auto-regeneration pipeline exists for that theme yet). If you ever
+   rebuild the Scatter gnome-shell theme, re-append this block.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Panel background: transparent so the date reads as a floating mark,
+   not a bar. No hairline. */
+#panel {
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Activities pill + workspace dot — the top-left sliver — off. */
+#panel .panel-button#panelActivities,
+#panel .panel-button#panelActivities StBoxLayout,
+#panel .panel-button#panelActivities .workspace-dot,
+#panel .panel-button.activities-button {
+  opacity: 0 !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+/* Any other button sitting in the left zone (#panelLeft children) —
+   keyboard layout, search, legacy app-menu — muted to almost invisible,
+   brightening on direct hover. */
+#panelLeft > .panel-button:not(.clock-display),
+#panelCenter > .panel-button:not(.clock-display) {
+  opacity: 0.25;
+  transition: opacity 240ms ease;
+}
+#panelLeft > .panel-button:not(.clock-display):hover,
+#panelCenter > .panel-button:not(.clock-display):hover {
+  opacity: 1;
+}
+
+/* System status icons (wifi/sound/battery/bluetooth) — always reachable,
+   but dim by default so they stop advertising themselves. They brighten
+   on hover. Silence is the default tone. */
+#panel .panel-button .system-status-icon,
+#panel .panel-button .panel-status-menu-box,
+#panel .panel-button .panel-status-indicators-box {
+  color: #3a3a46 !important;
+  opacity: 0.45;
+  transition: opacity 240ms ease, color 240ms ease;
+}
+#panel .panel-button:hover .system-status-icon,
+#panel .panel-button:focus .system-status-icon,
+#panel .panel-button:hover .panel-status-menu-box,
+#panel .panel-button:focus .panel-status-menu-box {
+  color: #d8dce2 !important;
+  opacity: 1;
+}
+
+/* The clock stays. Scatter register: small, quiet, Inter, centered. */
+#panel .panel-button.clock-display {
+  background-color: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+#panel .panel-button.clock-display .clock {
+  font-family: "Inter", "Helvetica Neue", sans-serif !important;
+  font-weight: 400 !important;
+  font-size: 12px !important;
+  letter-spacing: 0.02em !important;
+  color: #8a8a98 !important;
+}
+#panel .panel-button.clock-display:hover .clock,
+#panel:hover .panel-button.clock-display .clock {
+  color: #d8dce2 !important;
+}

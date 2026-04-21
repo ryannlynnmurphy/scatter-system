@@ -1,10 +1,8 @@
-/* Scatter Bar — the bottom of the machine.
+/* Scatter Bar — the still floor of the OS.
  *
- * Composition, not chrome. No visible boxes. One hairline at the top.
- * The bar IS the prompt: >-< on the left, typed text across the middle,
- * APPS at the right. Clicks land; borders don't.
- *
- * Token values mirror ~/scatter-system/scatter-design-system/.
+ * One row, full-width. >-< at the left, entry stretching right, nothing else.
+ * The bar wears no chrome; it is the chrome. A hairline at the top. The
+ * cursor is the only focus signal a human needs.
  */
 
 /* ── Bar ──────────────────────────────────────────────────────────────── */
@@ -13,73 +11,26 @@
     background-color: #0a0a0a;
     border: none;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
-    padding: 0 48px;
+    padding: 0 56px;
     spacing: 24px;
 }
 
-/* Left column: SCATTER wordmark stacked above talk-to-scatter input.
- * The speaker. Two lines of register, one voice. */
-.scatter-bar-speaker {
-    spacing: 4px;
-    min-width: 420px;
-    padding: 10px 0;
-}
-
-.scatter-bar-wordmark {
-    font-family: 'Inter', 'Helvetica Neue', sans-serif;
-    font-weight: 700;
-    font-size: 13px;
-    letter-spacing: 0.24em;
-    text-transform: uppercase;
-    color: #c8c8c8;
-    padding-bottom: 2px;
-}
-.scatter-bar-wordmark.listening {
-    color: #e8e8e8;
-}
-
-/* Apps zone: right side of the bar, empty at rest. Tiles live in the
- * _reveal layer positioned above this zone and animate up on mouse-cross. */
-.scatter-bar-apps-zone {
-    background-color: transparent;
-}
-
-/* The history handle: a small typographic mark at the far left. Only
- * visible when chats exist. Tooltip says "your chats" — clicking opens
- * the Journal inspector. Weight of a comma, not a button. */
-.scatter-bar-history {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 18px;
-    font-weight: 400;
-    color: #5a5a5a;
-    background-color: transparent;
-    background-gradient-direction: none;
-    border: none;
-    border-radius: 0;
-    padding: 0 10px 0 0;
-    min-width: 28px;
-    min-height: 28px;
-    letter-spacing: 0;
-}
-.scatter-bar-history:hover {
-    color: #c8c8c8;
-    background-color: transparent;
-}
-
-/* The glyph owns its own column. No one shares space with it.
- * Faint green glow marks >-< as the living eye of the machine — local,
- * ready, watching. Soft enough to read as ambient light, not neon. */
+/* The >-< glyph — Scatter's mouth. Holds the left gutter of the bar,
+ * same background as the bar, soft green ambient light. Not a button,
+ * not a status pill — a fixed character of the machine. */
 .scatter-bar-glyph {
     font-family: 'JetBrains Mono', 'Victor Mono', monospace;
-    font-size: 32px;
+    font-size: 28px;
     font-weight: 500;
-    color: #c8c8c8;
-    letter-spacing: 0.08em;
-    min-width: 96px;
-    text-shadow: 0 0 12px rgba(74, 222, 128, 0.55),
-                 0 0 28px rgba(74, 222, 128, 0.28);
+    color: #d8d8d8;
+    letter-spacing: 0.06em;
+    min-width: 64px;
+    text-shadow: 0 0 10px rgba(74, 222, 128, 0.45),
+                 0 0 22px rgba(74, 222, 128, 0.20);
 }
 
+/* The entry stretches across the bar. Placeholder is quiet; the caret is
+ * the only bright element — it marks where the next word lands. */
 .scatter-bar-entry {
     font-family: 'Inter', sans-serif;
     font-size: 22px;
@@ -92,45 +43,19 @@
     caret-color: #ffb800;
     caret-size: 2;
     padding: 0;
-    min-width: 380px;
 }
 
-.scatter-bar-entry:focus {
+.scatter-bar-entry:focus,
+.scatter-bar-entry:hover {
     background-color: transparent;
     border: none;
     box-shadow: none;
-}
-
-/* Focus-brighten: when the entry has focus, the >-< glyph brightens.
- * Binary confirmation ("I hear you"), not a pulsing AI-listening dot.
- * Triggered from JS via style-class toggle (St CSS has no :focus-within). */
-.scatter-bar-glyph.listening {
-    color: #e8e8e8;
-    text-shadow: 0 0 14px rgba(74, 222, 128, 0.75),
-                 0 0 32px rgba(74, 222, 128, 0.38);
 }
 
 .scatter-bar-entry StLabel {
     color: #5a5a5a;
     font-style: normal;
     font-weight: 400;
-}
-
-.scatter-bar-entry:hover {
-    background-color: transparent;
-}
-
-/* Status strip — glanceable system state in Scatter's register.
- * Replaces what used to live in GNOME's top panel. One surface, not two. */
-
-.scatter-bar-status {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 13px;
-    font-weight: 500;
-    letter-spacing: 0.08em;
-    color: #8a8a8a;
-    padding: 0 16px;
-    min-width: 220px;
 }
 
 /* ── Reveal: cascade of apps above the bar ─────────────────────────────── */
@@ -224,16 +149,18 @@
     max-width: 720px;
 }
 
-/* ── Desktop modality: reply as a durable chat bubble ──────────────────── */
-/* Stays until dismissed with ×. Trail footer shows provenance (local/cloud,
- * model, latency) — sovereignty made legible on every reply.               */
+/* ── Desktop modality: reply rises from the bar ───────────────────────── */
+/* The bubble anchors directly above the bar's >-< glyph and wears the same
+ * background + hairline top, so it reads as the bar growing a thought —
+ * not a separate floating widget. Same Inter typography as the entry. */
 
 .scatter-desktop-bubble {
-    background-color: rgba(10, 10, 10, 0.88);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 2px;
-    padding: 20px 24px 16px 28px;
-    spacing: 10px;
+    background-color: #0a0a0a;
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 0;
+    padding: 22px 28px 20px 56px;
+    spacing: 8px;
 }
 
 .scatter-desktop-row {
@@ -243,35 +170,35 @@
 .scatter-desktop-text {
     font-family: 'Inter', sans-serif;
     font-size: 22px;
-    font-weight: 300;
+    font-weight: 400;
     color: #f5f2ea;
     letter-spacing: -0.005em;
     line-height: 1.45;
 }
 
 .scatter-desktop-close {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 22px;
+    font-family: 'Inter', sans-serif;
+    font-size: 18px;
     font-weight: 300;
-    color: #8a8a8a;
+    color: #4a4a4a;
     background-color: transparent;
     background-gradient-direction: none;
     border: none;
     border-radius: 0;
     padding: 0 4px;
-    min-width: 28px;
-    min-height: 28px;
+    min-width: 24px;
+    min-height: 24px;
 }
 .scatter-desktop-close:hover {
-    color: #ffb800;
+    color: #c8c8c8;
     background-color: transparent;
 }
 
 .scatter-desktop-trail {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: 'Inter', sans-serif;
     font-size: 11px;
     font-weight: 500;
-    letter-spacing: 0.12em;
+    letter-spacing: 0.06em;
     color: #5a5a5a;
-    padding-top: 4px;
+    padding-top: 6px;
 }

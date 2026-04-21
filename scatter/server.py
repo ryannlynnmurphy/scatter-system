@@ -962,13 +962,14 @@ body {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 20px 20px 16px;
+    padding: 22px 20px 20px;
 }
-.rail-head .wordmark {
+.rail-head .rail-mark {
     font-family: "Inter", "Helvetica Neue", sans-serif;
-    font-weight: 700;
-    font-size: 0.95rem;
-    letter-spacing: -0.01em;
+    font-weight: 500;
+    font-size: 0.78rem;
+    letter-spacing: -0.005em;
+    color: #8a8a98;
     flex: 1;
 }
 .rail-head .mode-toggle { margin: 0; }
@@ -1106,16 +1107,6 @@ body {
     min-height: 0;
     overflow: hidden;
 }
-.canvas-head {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 14px 24px;
-    border-bottom: 1px solid var(--scatter-border-0);
-    font-size: 0.72rem;
-    letter-spacing: 0.06em;
-    color: #5a5a6e;
-}
 .stream {
     flex: 1;
     overflow-y: auto;
@@ -1161,60 +1152,40 @@ body {
     background: #fff;
 }
 
-.scatter-face {
-    font-family: "JetBrains Mono", monospace;
-    font-style: normal;
-    font-size: 0.9rem;
-    color: #00ff88;
-    letter-spacing: 0;
-    font-weight: 500;
-    transition: color 160ms ease;
-}
-.scatter-face.thinking { color: #c8c8d0; }
-.scatter-face.online { color: #ffb800; }
-.scatter-face.error { color: #ff3355; }
-.scatter-face.sleeping { color: #5a5a6e; }
-
 .mode-toggle {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    margin-top: 10px;
-    padding: 4px 10px;
+    margin: 0;
+    padding: 4px 10px 4px 8px;
     background: transparent;
-    border: 1px solid #1e1e2a;
-    border-radius: 0;
-    color: #5a5a6e;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    color: #6a6a78;
     font-family: inherit;
     font-size: 0.7rem;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.02em;
     text-transform: lowercase;
     cursor: pointer;
-    transition: none;
+    transition: border-color 180ms ease, color 180ms ease, background 180ms ease;
 }
-.mode-toggle:hover {
-    border-color: #ffb800;
-    color: #ffb800;
-}
+.mode-toggle .mode-label:empty { display: none; }
+.mode-toggle:hover { color: #c8c8d0; }
 .mode-toggle .mode-dot {
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
     border-radius: 50%;
-    background: #00ff88;
-    box-shadow: 0 0 6px rgba(0, 255, 136, 0.4);
+    background: #3a3a46;
 }
 .mode-toggle.online {
-    background: #2a1a00;
-    border-color: #ffb800;
+    background: rgba(255, 184, 0, 0.08);
+    border-color: rgba(255, 184, 0, 0.45);
     color: #ffb800;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    font-weight: 700;
-    animation: mode-pulse 2s ease-in-out infinite;
+    padding-right: 12px;
 }
 .mode-toggle.online .mode-dot {
     background: #ffb800;
-    box-shadow: 0 0 10px rgba(255, 184, 0, 0.9);
+    box-shadow: 0 0 10px rgba(255, 184, 0, 0.55);
 }
 @keyframes mode-pulse {
     0%, 100% { box-shadow: inset 0 0 0 0 rgba(255, 184, 0, 0); }
@@ -1450,101 +1421,52 @@ body {
     border-color: var(--scatter-green-border, rgba(0,255,136,0.25));
 }
 
-/* Preview panel */
-.status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: #2a5a3a;
-    display: inline-block;
-    margin-right: 8px;
-}
-
-.status-dot.working {
-    background: #ffb800;
-    animation: pulse 1s ease-in-out infinite;
-}
-
-.bubble-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.7rem;
-    color: #6a7a72;
-    letter-spacing: 0.06em;
-    text-transform: lowercase;
-}
-
-.bubble-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #00ff88;
-    box-shadow: 0 0 8px rgba(0, 255, 136, 0.5);
-}
-
-.bubble-badge.offline .bubble-dot { background: #555; box-shadow: none; }
-.bubble-badge.offline #bubble-text { color: #555; }
-
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.3; }
-}
-
-.inspector-note {
-    padding: 0 20px 14px;
-    font-size: 0.72rem;
-    color: #5a5a6e;
-    line-height: 1.5;
-    font-style: normal;
-    letter-spacing: -0.005em;
-}
-
-/* Chat exchange: how the Journal renders conversations with Scatter. */
+/* Chat exchange — a journal entry, not a chat log.
+   Reads like prose: one voice indented, one flush, quiet time beneath. */
 .chat-exchange {
     background: transparent;
-    border-left: 1px solid #1f1f1f;
-    padding: 2px 10px 10px;
-    margin: 0 8px 14px;
+    border: none;
+    padding: 2px 4px 14px;
+    margin: 0 14px 18px;
+    border-bottom: 1px solid #141414;
 }
+.chat-exchange:last-child { border-bottom: none; }
 .chat-turn {
-    font-size: 0.85rem;
-    line-height: 1.45;
-    padding: 6px 0;
-    color: #d8e4dc;
+    font-family: "Inter", "Helvetica Neue", sans-serif;
+    font-size: 0.9rem;
+    line-height: 1.55;
+    padding: 4px 0;
+    color: #d8dce2;
     white-space: pre-wrap;
     word-break: break-word;
+    margin: 0;
 }
-.chat-turn .chat-who {
-    display: inline-block;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.62rem;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
+.chat-turn.user { color: #b8bcc2; }
+.chat-turn.scatter { color: #e8ecf0; padding-left: 18px; }
+.chat-turn .who {
+    font-size: 0.68rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
     color: #5a5a6e;
     margin-right: 8px;
-    min-width: 54px;
 }
-.chat-turn.user .chat-who { color: #00ff88; }
-.chat-turn.scatter .chat-who { color: #ffb800; }
+.chat-turn.scatter .who { color: #6a6a78; }
 .chat-trail {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.62rem;
-    letter-spacing: 0.12em;
-    color: #444;
-    padding-top: 6px;
+    display: block;
+    font-family: "Inter", "Helvetica Neue", sans-serif;
+    font-size: 0.65rem;
+    letter-spacing: 0;
+    color: #3a3a46;
+    padding-top: 10px;
+    padding-left: 18px;
+    font-variant-numeric: tabular-nums;
 }
 .chat-break {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.65rem;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: #5a5a6e;
+    height: 0;
+    margin: 22px 22px;
+    border-top: 1px solid #1a1a1a;
     text-align: center;
-    padding: 18px 0;
-    margin: 6px 8px;
-    border-top: 1px solid #1f1f1f;
-    border-bottom: 1px solid #1f1f1f;
+    font-size: 0;
 }
 
 /* Scrollbar */
@@ -1556,57 +1478,27 @@ body {
 <body>
 
 <aside class="rail">
-    <div class="rail-head">
-        <span id="scatter-face" class="scatter-face">&gt;.&lt;</span>
-        <span class="wordmark">SCATTER</span>
+    <header class="rail-head">
+        <span class="rail-mark">scatter</span>
         <button class="mode-toggle" id="mode-toggle" title="data leaves the machine only when you say so" onclick="toggleMode()">
             <span class="mode-dot"></span>
-            <span class="mode-label" id="mode-label">local</span>
+            <span class="mode-label" id="mode-label"></span>
         </button>
-    </div>
-
-    <div class="inspector-note">
-        Your chats with Scatter. The bar at the bottom of the screen is how you talk.
-    </div>
-
-    <nav class="subnav">
-        <button class="sub-link active" data-view="journal" onclick="switchView('journal')">journal</button>
-        <button class="sub-link" onclick="newChat()">new chat</button>
-    </nav>
-
-    <!-- Watts and theme controls live at /stats and /api/theme respectively.
-         Not surfaced in the rail chrome — only the one person who cares
-         about tok/J can summon them. -->
+    </header>
 </aside>
 
 <main class="canvas">
-    <div class="canvas-head">
-        <span><span class="status-dot" id="status-dot"></span><span id="status-text">ready</span></span>
-        <!-- canvas: bubble badge removed -->
-    </div>
     <div class="view active" id="view-journal"><div class="entry-list" id="journal-list"></div></div>
     <div class="view" id="view-audit"><div class="entry-list" id="audit-list"></div></div>
 </main>
 
 <script>
-// Inspector mode: this webkit is journal + audit + egress toggle only.
-// The prompt lives in the bar at the bottom of the screen.
-const statusDot = document.getElementById('status-dot');
-const statusText = document.getElementById('status-text');
+// Journal surface. The prompt lives in the bar at the bottom of the screen.
+// Silence is the success signal — we surface state *changes*, not state.
 
-// Health check. The bubble badge was removed from the chrome, so we
-// only surface *problems* — silence is good news.
-let modelOnline = true;
-fetch('/health').then(r => r.json()).then(data => {
-    modelOnline = data.ollama === 'running' && data.models.length > 0;
-    if (!modelOnline) {
-        addMessage("the local model isn't responding. in a terminal: ollama serve", 'error');
-    }
-}).catch(() => { modelOnline = false; });
-
-// Egress mode — the conscious online/offline toggle. OFF by default
-// every boot. When ON, the header pill glows amber and no flow is
-// silent about sending data off-machine.
+// Egress mode — conscious online/offline toggle. OFF by default every boot.
+// When ON, the pill glows amber and carries the 'online · claude api' label.
+// When OFF, the pill is silent — local is the invariant, no chest-thump.
 const modeToggle = document.getElementById('mode-toggle');
 const modeLabel = document.getElementById('mode-label');
 
@@ -1614,11 +1506,9 @@ function renderMode(online) {
     if (online) {
         modeToggle.classList.add('online');
         modeLabel.textContent = 'online · claude api';
-        setFace('online');
     } else {
         modeToggle.classList.remove('online');
-        modeLabel.textContent = 'local only';
-        setFace('idle');
+        modeLabel.textContent = '';
     }
 }
 
@@ -1636,42 +1526,6 @@ async function toggleMode() {
 }
 
 fetch('/mode').then(r => r.json()).then(d => renderMode(d.online)).catch(() => {});
-
-// Live Scatter face — glyph + color reflects current state.
-// States rank from visible-priority high to low:
-//   error > building > thinking > online > sleeping > idle
-let FACES = {
-    idle: '>.<', ready: '>.<', thinking: '>-<', building: '>=<',
-    curious: '>O<', happy: '>·<', online: '>O<',
-    sleeping: '>_<', error: '>x<', winking: '>!<'
-};
-let currentFaceState = 'idle';
-const scatterFace = document.getElementById('scatter-face');
-
-function setFace(state) {
-    if (state === currentFaceState) return;
-    currentFaceState = state;
-    const glyph = FACES[state] || FACES.idle;
-    if (scatterFace) {
-        scatterFace.textContent = glyph;
-        scatterFace.className = 'scatter-face ' + state;
-    }
-}
-
-fetch('/face').then(r => r.json()).then(d => { FACES = d.faces; setFace('idle'); }).catch(() => {});
-
-// ---------- view switching ----------
-let currentView = 'journal';
-
-async function switchView(name) {
-    currentView = name;
-    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    document.getElementById('view-' + name).classList.add('active');
-    document.querySelectorAll('.sub-link[data-view]').forEach(t => t.classList.toggle('active', t.dataset.view === name));
-
-    if (name === 'journal') await loadJournal();
-    if (name === 'audit') await loadAudit();
-}
 
 function fmtTime(iso) {
     try {
@@ -1701,7 +1555,7 @@ async function loadJournal() {
         const data = await resp.json();
         const entries = (data.entries || []);
         if (entries.length === 0) {
-            list.innerHTML = '<div class="empty-note">no chats yet.<br>say something to scatter.</div>';
+            list.innerHTML = '<div class="empty-note">nothing here yet.</div>';
             return;
         }
         // Most recent first; include any client-side session-break markers.
@@ -1717,17 +1571,16 @@ async function loadJournal() {
 
 function renderChatExchange(e) {
     if (e.route === 'break') {
-        return `<div class="chat-break">— new chat —</div>`;
+        return `<div class="chat-break"></div>`;
     }
     const ts = fmtTime(new Date((e.ts || 0) * 1000).toISOString());
-    const route = escapeHTML(e.route || '');
     const user = escapeHTML(e.user || '');
     const reply = escapeHTML(e.reply || '');
     return `
     <div class="chat-exchange">
-      <div class="chat-turn user"><span class="chat-who">you</span>${user}</div>
-      <div class="chat-turn scatter"><span class="chat-who">scatter</span>${reply}</div>
-      <div class="chat-trail">${ts} · ${route}</div>
+      <p class="chat-turn user"><span class="who">you</span>${user}</p>
+      <p class="chat-turn scatter"><span class="who">scatter</span>${reply}</p>
+      <time class="chat-trail">${ts}</time>
     </div>`;
 }
 

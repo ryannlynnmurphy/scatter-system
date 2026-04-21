@@ -23,7 +23,15 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 
 const ROUTER_URL = 'http://127.0.0.1:8787/chat';
 const SPEAK_URL = 'http://127.0.0.1:8787/speak';
-const BAR_HEIGHT = 96;
+const BAR_HEIGHT = 76;
+
+// Motion grammar — one easing, one rise, one fall. Every Scatter animation
+// that isn't a composed signature (fox-leap, etc.) pulls from here so the
+// surface has one heartbeat, Plymouth-weighted.
+const MOTION_EASE = Clutter.AnimationMode.EASE_OUT_CUBIC;
+const MOTION_IN_MS = 240;
+const MOTION_OUT_MS = 180;
+const MOTION_RISE_PX = 16;
 
 // Apps list — peek-reveal. Keep the set tight; the primary verb is the prompt.
 const APPS = [
@@ -75,36 +83,16 @@ export default class ScatterBarExtension extends Extension {
         this._buildRevealLayer();
         this._buildResponseOverlay();
         this._buildDesktopSurface();
-        this._wireHoverReveal();
         this._place();
-        this._refreshHistoryHandle();
 
         this._monitorsChangedId = Main.layoutManager.connect(
             'monitors-changed', () => this._place());
-
-        // Boot greet: once per shell session, Scatter names the state of
-        // the machine so sovereignty is legible before the first prompt.
-        // Deferred ~1.2s so the shell settles and the bubble doesn't
-        // flash during extension re-enable cycles.
-        this._greetTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1200, () => {
-            this._greetTimeout = 0;
-            this._bootGreet();
-            return GLib.SOURCE_REMOVE;
-        });
     }
 
     disable() {
-        if (this._greetTimeout) {
-            GLib.source_remove(this._greetTimeout);
-            this._greetTimeout = 0;
-        }
         if (this._monitorsChangedId) {
             Main.layoutManager.disconnect(this._monitorsChangedId);
             this._monitorsChangedId = 0;
-        }
-        if (this._statusTimeout) {
-            GLib.source_remove(this._statusTimeout);
-            this._statusTimeout = 0;
         }
         if (this._hideRevealTimeout) {
             GLib.source_remove(this._hideRevealTimeout);
@@ -122,70 +110,34 @@ export default class ScatterBarExtension extends Extension {
     // ── Bar: the literal bottom panel ────────────────────────────────────
 
     _buildBar() {
+        // One row, full-width. >-< at the left, entry stretching right.
+        // No wordmark, no handle, no apps zone. The bar is the still center
+        // of the OS; it carries one verb (talk) and wears no decoration.
         this._bar = new St.BoxLayout({
             name: 'scatterBar',
             style_class: 'scatter-bar',
             vertical: false,
             reactive: true,
-            track_hover: true,
+            track_hover: false,
         });
 
-        // Far left: the artifacts handle — a small typographic mark that
-        // becomes visible only when artifacts exist. Clicking opens the
-        // gallery so the forgetful user doesn't have to remember a verb.
-        this._historyHandle = new St.Button({
-            style_class: 'scatter-bar-history',
-            label: '≡',
-            can_focus: true,
-            track_hover: true,
+        this._glyph = new St.Label({
+            text: '>-<',
+            style_class: 'scatter-bar-glyph',
             y_align: Clutter.ActorAlign.CENTER,
         });
-        this._historyHandle.visible = false;
-        this._historyHandle.connect('clicked', () => this._openJournal());
-        this._bar.add_child(this._historyHandle);
-
-        // Left column — vertical stack: SCATTER wordmark above the
-        // prompt input. The face/wordmark is the speaker; the input is
-        // what you say back. One voice, two lines of register.
-        this._leftColumn = new St.BoxLayout({
-            vertical: true,
-            style_class: 'scatter-bar-speaker',
-            y_align: Clutter.ActorAlign.CENTER,
-        });
-
-        this._face = new St.Label({
-            text: 'Scatter',
-            style_class: 'scatter-bar-wordmark',
-        });
-        this._leftColumn.add_child(this._face);
+        this._bar.add_child(this._glyph);
 
         this._entry = new St.Entry({
             hint_text: 'talk to scatter…',
             can_focus: true,
             track_hover: true,
             style_class: 'scatter-bar-entry',
+            x_expand: true,
+            y_align: Clutter.ActorAlign.CENTER,
         });
         this._entry.clutter_text.connect('activate', () => this._submit());
-        this._entry.clutter_text.connect('key-focus-in', () => {
-            this._face.add_style_class_name('listening');
-        });
-        this._entry.clutter_text.connect('key-focus-out', () => {
-            this._face.remove_style_class_name('listening');
-        });
-        this._leftColumn.add_child(this._entry);
-
-        this._bar.add_child(this._leftColumn);
-
-        // Right side: empty breathing space. Apps reveal as tiles above
-        // this region when the mouse drags across it — progressive dock.
-        // No status strip (clock/battery/net live in the GNOME top panel).
-        this._appsZone = new St.Widget({
-            style_class: 'scatter-bar-apps-zone',
-            x_expand: true,
-            reactive: true,
-            track_hover: true,
-        });
-        this._bar.add_child(this._appsZone);
+        this._bar.add_child(this._entry);
 
         Main.layoutManager.addChrome(this._bar, {
             affectsStruts: true,
@@ -246,18 +198,11 @@ export default class ScatterBarExtension extends Extension {
         });
     }
 
-    _wireHoverReveal() {
-        // Mouse at the bottom of the screen = apps pull up, one by one,
-        // in the order the cursor crosses their columns. Mac-dock progressive
-        // reveal, authored for the Scatter register.
-        this._bar.connect('motion-event', (actor, event) => {
-            const [x] = event.get_coords();
-            this._revealByCursorX(x);
-        });
-        this._bar.connect('leave-event', () => this._scheduleHide());
-        this._reveal.connect('leave-event', () => this._scheduleHide());
-        // Per-tile hover handled by enter/leave on the individual tiles.
-    }
+    // Reveal is no longer triggered by hovering the bar — the bar is now a
+    // still line that wears no apps. Apps get summoned by a verb typed into
+    // the entry, or by the top-left apps button (future). The reveal actor
+    // and its animation code remain so that summoning path can reuse them.
+    _wireHoverReveal() { /* intentionally empty */ }
 
     _revealByCursorX(cursorX) {
         this._cancelHideTimer();
@@ -457,194 +402,77 @@ export default class ScatterBarExtension extends Extension {
             this._desktopHideTimeout = 0;
         }
         this._desktopText.set_text(text);
-        this._desktopTrail.set_text(this._formatTrail(meta || {}));
+        const trail = this._formatTrail(meta || {});
+        this._desktopTrail.set_text(trail);
+        this._desktopTrail.visible = trail.length > 0;
+        this._desktop.opacity = 0;
+        this._desktop.translation_y = MOTION_RISE_PX;
         this._desktop.visible = true;
         this._place();
         this._desktop.ease({
             opacity: 255,
-            duration: 320,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            translation_y: 0,
+            duration: MOTION_IN_MS,
+            mode: MOTION_EASE,
         });
         // No auto-fade. The bubble stays until × is clicked or the next
         // reply replaces it. Sovereignty over your own thoughts includes
         // sovereignty over when they disappear.
     }
 
-    // Boot greet — named state of the machine at first paint. Runs once
-    // per shell session via the timeout scheduled in enable().
-    _bootGreet() {
-        const parts = [
-            "I'm awake.",
-            "Cloud is off.",
-            "Voice is off.",
-            "Running locally.",
-        ];
-        this._showDesktop(parts.join(' '), {
-            route: 'local:greet',
-            model: 'scatter',
-        });
-    }
-
-    _openJournal() {
-        // Spawns the webkit Journal inspector. It's a stepping-stone until
-        // history lands natively on the canvas — the handle lets users
-        // reach their chats without remembering the recall verb.
-        try {
-            GLib.spawn_command_line_async(
-                'python3 /home/ryannlynnmurphy/scatter-system/scatter/launcher.py',
-            );
-        } catch (e) {
-            this._showResponse('error', `could not open journal: ${e.message || e}`, 4000);
-        }
-    }
-
-    // Check if a chat log exists on disk; show/hide the history handle
-    // accordingly. Called on enable and after each reply.
-    _refreshHistoryHandle() {
-        if (!this._historyHandle) return;
-        try {
-            const logFile = Gio.File.new_for_path(
-                GLib.get_home_dir() + '/.scatter/chats.jsonl',
-            );
-            const [exists, size] = (() => {
-                try {
-                    const info = logFile.query_info('standard::size', 0, null);
-                    return [true, info.get_size()];
-                } catch (_) {
-                    return [false, 0];
-                }
-            })();
-            this._historyHandle.visible = exists && size > 0;
-        } catch (_) {
-            this._historyHandle.visible = false;
-        }
-    }
-
     _hideResponse() {
         if (!this._overlay || !this._overlay.visible) return;
         this._overlay.ease({
             opacity: 0,
-            duration: 180,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            duration: MOTION_OUT_MS,
+            mode: MOTION_EASE,
             onComplete: () => { if (this._overlay) this._overlay.visible = false; },
         });
     }
 
     _hideDesktop() {
         if (!this._desktop || !this._desktop.visible) return;
+        // Falls back into the bar — same rise distance, same easing.
         this._desktop.ease({
             opacity: 0,
-            duration: 220,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            translation_y: MOTION_RISE_PX,
+            duration: MOTION_OUT_MS,
+            mode: MOTION_EASE,
             onComplete: () => { if (this._desktop) this._desktop.visible = false; },
         });
     }
 
-    // Teach-trail: 'local · llama · 0.4s' or 'cloud · sonnet · egress on'.
-    // Makes provenance visible on every reply — the patent claim, rendered.
+    // Provenance chip on the desktop bubble. Local replies are the invariant
+    // and carry no trail — silence is the success signal. Cloud replies carry
+    // a visible 'claude · egress on' mark so data leaves consciously.
     _formatTrail(meta) {
-        const parts = [];
         const route = meta.route || '';
-        if (route.startsWith('cloud:')) {
-            parts.push('cloud');
-            const model = route.split(':')[1];
-            if (model) parts.push(model);
-            parts.push('egress on');
-        } else if (route.startsWith('local:')) {
-            parts.push('local');
-            const m = meta.model || route.split(':')[1];
-            if (m) parts.push(String(m).split(':')[0]);
-        } else if (route) {
-            parts.push(route);
-        }
-        if (meta.ms !== undefined) {
-            const s = Math.max(0, meta.ms / 1000);
-            parts.push(s < 10 ? `${s.toFixed(1)}s` : `${Math.round(s)}s`);
-        }
-        return parts.join(' · ');
+        if (route.startsWith('cloud:')) return 'claude · egress on';
+        return '';
     }
 
     _showResponse(route, text, holdMs = 6000) {
         this._overlayRoute.set_text(route.toUpperCase());
         this._overlayText.set_text(text);
+        this._overlay.opacity = 0;
         this._overlay.visible = true;
         this._place();
         this._overlay.ease({
             opacity: 255,
-            duration: 220,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            duration: MOTION_IN_MS,
+            mode: MOTION_EASE,
         });
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, holdMs, () => {
             if (this._overlay) {
                 this._overlay.ease({
                     opacity: 0,
-                    duration: 420,
-                    mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                    duration: MOTION_OUT_MS,
+                    mode: MOTION_EASE,
                     onComplete: () => { if (this._overlay) this._overlay.visible = false; },
                 });
             }
             return GLib.SOURCE_REMOVE;
         });
-    }
-
-    // ── Status strip: glanceable system state in the bar's right column.
-    // Reads /sys for battery, /proc/net/route for network presence, and the
-    // shell clock for time. Updated on a 15s tick — rendered as one tight
-    // monospace line in Scatter's register. No icons, no tray bloat.
-
-    _startStatusClock() {
-        this._refreshStatus();
-        this._statusTimeout = GLib.timeout_add_seconds(
-            GLib.PRIORITY_DEFAULT, 15, () => {
-                this._refreshStatus();
-                return GLib.SOURCE_CONTINUE;
-            });
-    }
-
-    _refreshStatus() {
-        if (!this._status) return;
-        const now = GLib.DateTime.new_now_local();
-        const time = now.format('%H:%M');
-        const battery = this._readBattery();
-        const net = this._hasNetwork() ? 'net' : 'offline';
-        const parts = [net, battery, time].filter(Boolean);
-        this._status.set_text(parts.join('  ·  '));
-    }
-
-    _readBattery() {
-        try {
-            const dir = Gio.File.new_for_path('/sys/class/power_supply');
-            const iter = dir.enumerate_children('standard::name',
-                Gio.FileQueryInfoFlags.NONE, null);
-            let info;
-            while ((info = iter.next_file(null)) !== null) {
-                const name = info.get_name();
-                if (!name.startsWith('BAT')) continue;
-                const cap = Gio.File.new_for_path(
-                    `/sys/class/power_supply/${name}/capacity`);
-                const [ok, bytes] = cap.load_contents(null);
-                if (!ok) continue;
-                const pct = parseInt(new TextDecoder().decode(bytes).trim(), 10);
-                if (!Number.isFinite(pct)) continue;
-                return `${pct}%`;
-            }
-        } catch (_) {}
-        return '';
-    }
-
-    _hasNetwork() {
-        // /proc/net/route has a header line plus one entry per route. More
-        // than one line → at least one route exists → online-ish.
-        try {
-            const file = Gio.File.new_for_path('/proc/net/route');
-            const [ok, bytes] = file.load_contents(null);
-            if (!ok) return false;
-            const lines = new TextDecoder().decode(bytes).split('\n')
-                .filter(l => l.trim().length > 0);
-            return lines.length > 1;
-        } catch (_) {
-            return false;
-        }
     }
 
     // ── Placement ─────────────────────────────────────────────────────────
@@ -658,14 +486,10 @@ export default class ScatterBarExtension extends Extension {
             this._bar.set_size(monitor.width, BAR_HEIGHT);
         }
         if (this._reveal) {
-            // Reveal sits directly above the bar, spanning the apps zone on
-            // the right side. Tiles live here but start 120px below their
-            // resting spot — they rise as the cursor crosses their columns.
             const tileWidth = 140;
             const tileGap = 16;
             const revealHeight = 120;
             const revealWidth = APPS.length * tileWidth + (APPS.length - 1) * tileGap + 48;
-            // Anchor near the right of the bar, leaving breathing space.
             const rightMargin = 56;
             this._reveal.set_size(revealWidth, revealHeight);
             this._reveal.set_position(
@@ -682,17 +506,16 @@ export default class ScatterBarExtension extends Extension {
             );
         }
         if (this._desktop) {
-            // Speech bubble above Scatter's face in the bar's left column.
-            // One reply at a time, dismissed by ×. Anchored so it reads as
-            // speech from the character, not a broadcast over the desktop.
-            const bubbleWidth = Math.min(520, Math.floor(monitor.width * 0.38));
+            // The bubble rises directly above the bar's >-< glyph — Scatter's
+            // mouth opening. Matches the bar's background and hairline so the
+            // bubble reads as the bar growing a thought, not a second widget.
+            const bubbleWidth = Math.min(560, Math.floor(monitor.width * 0.42));
             this._desktop.set_size(bubbleWidth, -1);
             const [, natHeight] = this._desktop.get_preferred_height(bubbleWidth);
-            const height = Math.max(64, natHeight);
+            const height = Math.max(56, natHeight);
             const barTop = monitor.y + monitor.height - BAR_HEIGHT;
-            // Left-anchored to where the wordmark lives, with a gap above.
             const anchorX = monitor.x + 56;
-            this._desktop.set_position(anchorX, barTop - height - 18);
+            this._desktop.set_position(anchorX, barTop - height);
         }
     }
 
@@ -955,19 +778,16 @@ export default class ScatterBarExtension extends Extension {
         });
     }
 
-    _flashGlyph() {
-        // Brief amber pulse on the wordmark to confirm an action fired.
-        if (!this._face) return;
-        const orig = this._face.get_style();
-        this._face.set_style('color: #ffb800;');
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 420, () => {
-            if (this._face) this._face.set_style(orig);
-            return GLib.SOURCE_REMOVE;
-        });
-    }
+    // Action-fired feedback lives in motion, not color. When a verb lands
+    // (sleep / open firefox / etc.), the entry clears and — for visible
+    // actions — the launched app's own signature carries the story. No
+    // extra pulse on the bar's chrome.
+    _flashGlyph() { /* no-op; kept for call sites */ }
 
     _sendToRouter(message) {
-        this._showResponse('routing', '…', 60000);  // long hold while awaiting
+        // No routing overlay — the bar entry itself is the signal that a
+        // message is in flight. A floating 'ROUTING …' pop-up announces the
+        // machinery of conversation; we want silence until there's a reply.
         const body = JSON.stringify({ message, prefer_local: true });
         const msg = Soup.Message.new('POST', ROUTER_URL);
         msg.request_headers.append('Content-Type', 'application/json');
@@ -1004,7 +824,6 @@ export default class ScatterBarExtension extends Extension {
                             ms: data.ms,
                         });
                         this._speak(reply);
-                        this._refreshHistoryHandle();
                     }
                 } catch (e) {
                     this._showResponse('error', `${e.message || e}`, 4000);
