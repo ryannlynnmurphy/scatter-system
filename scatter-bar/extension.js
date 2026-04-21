@@ -77,7 +77,6 @@ export default class ScatterBarExtension extends Extension {
         this._buildDesktopSurface();
         this._wireHoverReveal();
         this._place();
-        this._startStatusClock();
         this._refreshHistoryHandle();
 
         this._monitorsChangedId = Main.layoutManager.connect(
@@ -131,9 +130,9 @@ export default class ScatterBarExtension extends Extension {
             track_hover: true,
         });
 
-        // Far left: the history handle — a small typographic mark that
-        // becomes visible only when chats exist. Clicking opens the Journal
-        // so the forgetful user doesn't have to remember a recall verb.
+        // Far left: the artifacts handle — a small typographic mark that
+        // becomes visible only when artifacts exist. Clicking opens the
+        // gallery so the forgetful user doesn't have to remember a verb.
         this._historyHandle = new St.Button({
             style_class: 'scatter-bar-history',
             label: '≡',
@@ -145,43 +144,48 @@ export default class ScatterBarExtension extends Extension {
         this._historyHandle.connect('clicked', () => this._openJournal());
         this._bar.add_child(this._historyHandle);
 
-        // Left: the iconic glyph
-        this._glyph = new St.Label({
-            text: '>-<',
-            style_class: 'scatter-bar-glyph',
+        // Left column — vertical stack: SCATTER wordmark above the
+        // prompt input. The face/wordmark is the speaker; the input is
+        // what you say back. One voice, two lines of register.
+        this._leftColumn = new St.BoxLayout({
+            vertical: true,
+            style_class: 'scatter-bar-speaker',
             y_align: Clutter.ActorAlign.CENTER,
         });
-        this._bar.add_child(this._glyph);
 
-        // Center: the prompt input — the primary verb of the OS
+        this._face = new St.Label({
+            text: 'Scatter',
+            style_class: 'scatter-bar-wordmark',
+        });
+        this._leftColumn.add_child(this._face);
+
         this._entry = new St.Entry({
             hint_text: 'talk to scatter…',
             can_focus: true,
             track_hover: true,
             style_class: 'scatter-bar-entry',
-            x_expand: true,
-            y_align: Clutter.ActorAlign.CENTER,
         });
         this._entry.clutter_text.connect('activate', () => this._submit());
-        // Focus-brighten: when the prompt takes focus, the glyph brightens.
-        // Binary "I hear you" — no pulse, no loop, no AI-listening novelty.
         this._entry.clutter_text.connect('key-focus-in', () => {
-            this._glyph.add_style_class_name('listening');
+            this._face.add_style_class_name('listening');
         });
         this._entry.clutter_text.connect('key-focus-out', () => {
-            this._glyph.remove_style_class_name('listening');
+            this._face.remove_style_class_name('listening');
         });
-        this._bar.add_child(this._entry);
+        this._leftColumn.add_child(this._entry);
 
-        // Right: glanceable status strip. Replaces what used to live in
-        // GNOME's top panel — time, battery, network — rendered in Scatter's
-        // register so there's exactly one chrome surface, not two.
-        this._status = new St.Label({
-            text: '',
-            style_class: 'scatter-bar-status',
-            y_align: Clutter.ActorAlign.CENTER,
+        this._bar.add_child(this._leftColumn);
+
+        // Right side: empty breathing space. Apps reveal as tiles above
+        // this region when the mouse drags across it — progressive dock.
+        // No status strip (clock/battery/net live in the GNOME top panel).
+        this._appsZone = new St.Widget({
+            style_class: 'scatter-bar-apps-zone',
+            x_expand: true,
+            reactive: true,
+            track_hover: true,
         });
-        this._bar.add_child(this._status);
+        this._bar.add_child(this._appsZone);
 
         Main.layoutManager.addChrome(this._bar, {
             affectsStruts: true,
@@ -193,21 +197,26 @@ export default class ScatterBarExtension extends Extension {
     // ── Reveal layer: apps slide up above the bar, one by one ──────────
 
     _buildRevealLayer() {
+        // Progressive dock: tiles live above the bar in the apps zone,
+        // hidden below the screen edge at rest. As the cursor drags across
+        // the bar from left to right, each tile rises up in turn. Hover
+        // magnifies. Click triggers the per-app signature animation.
         this._reveal = new St.BoxLayout({
             name: 'scatterReveal',
             style_class: 'scatter-reveal',
             vertical: false,
-            reactive: true,
-            track_hover: true,
+            reactive: false,
         });
-        this._reveal.opacity = 0;
-        this._reveal.visible = false;
+        this._reveal.visible = true;  // container always present; items animate in
+        this._reveal.opacity = 255;
 
         this._revealItems = [];
         APPS.forEach((app, i) => {
             const item = new St.Button({
                 style_class: 'scatter-reveal-item',
                 can_focus: true,
+                track_hover: true,
+                reactive: true,
             });
             const inner = new St.BoxLayout({ vertical: true });
             const glyph = new St.Label({ text: app.glyph, style_class: 'scatter-reveal-glyph' });
@@ -215,10 +224,19 @@ export default class ScatterBarExtension extends Extension {
             inner.add_child(glyph);
             inner.add_child(label);
             item.set_child(inner);
-            item.connect('clicked', () => {
-                this._launchFromTile(item, app.exec);
-            });
+
+            // Initial state: below its final position, invisible.
+            item.set_pivot_point(0.5, 1.0);
+            item.translation_y = 120;
             item.opacity = 0;
+            item._armed = false;  // has the cursor passed its column yet
+
+            item.connect('clicked', () => {
+                this._launchFromTile(item, app);
+            });
+            item.connect('enter-event', () => this._magnifyTile(item));
+            item.connect('leave-event', () => this._settleTile(item));
+
             this._reveal.add_child(item);
             this._revealItems.push(item);
         });
@@ -229,32 +247,85 @@ export default class ScatterBarExtension extends Extension {
     }
 
     _wireHoverReveal() {
-        // Synthesis: the bar itself is the reveal trigger. Whole-bar target
-        // (96px tall) is Fitts-safe — no edge-strip hunting, no accidental
-        // summon from fullscreen video resting the mouse at screen bottom.
-        this._bar.connect('enter-event', () => this._showReveal());
+        // Mouse at the bottom of the screen = apps pull up, one by one,
+        // in the order the cursor crosses their columns. Mac-dock progressive
+        // reveal, authored for the Scatter register.
+        this._bar.connect('motion-event', (actor, event) => {
+            const [x] = event.get_coords();
+            this._revealByCursorX(x);
+        });
         this._bar.connect('leave-event', () => this._scheduleHide());
-        this._reveal.connect('enter-event', () => this._cancelHideTimer());
         this._reveal.connect('leave-event', () => this._scheduleHide());
+        // Per-tile hover handled by enter/leave on the individual tiles.
     }
 
-    _toggleReveal() {
-        if (this._revealShown) this._hideReveal();
-        else this._showReveal();
+    _revealByCursorX(cursorX) {
+        this._cancelHideTimer();
+        this._revealShown = true;
+        // For each tile: if the cursor has passed its left edge, arm it
+        // (animate into position). Tiles behind the cursor stay up; tiles
+        // ahead of the cursor stay down.
+        this._revealItems.forEach((item, i) => {
+            const [tx] = item.get_transformed_position();
+            const leftEdge = tx;
+            if (cursorX >= leftEdge - 8 && !item._armed) {
+                item._armed = true;
+                // Tiny stagger so even a fast drag feels like a cascade.
+                const delay = i * 18;
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => {
+                    if (!item._armed) return GLib.SOURCE_REMOVE;
+                    item.ease({
+                        opacity: 255,
+                        translation_y: 0,
+                        duration: 360,
+                        mode: Clutter.AnimationMode.EASE_OUT_BACK,
+                    });
+                    return GLib.SOURCE_REMOVE;
+                });
+            }
+        });
+    }
+
+    _magnifyTile(item) {
+        // Mac-dock magnify — the tile the cursor is over grows and lifts.
+        item.ease({
+            scale_x: 1.18,
+            scale_y: 1.18,
+            translation_y: -10,
+            duration: 180,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        });
+    }
+
+    _settleTile(item) {
+        // Return to armed-but-unhovered state. Keep translation_y at 0
+        // (still raised to its dock position, just no extra lift).
+        if (!item._armed) return;
+        item.ease({
+            scale_x: 1.0,
+            scale_y: 1.0,
+            translation_y: 0,
+            duration: 160,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        });
     }
 
     _showReveal() {
+        // Retained for back-compat (toggle path). Arms all tiles at once.
         this._cancelHideTimer();
-        if (this._revealShown) return;
         this._revealShown = true;
-        this._reveal.visible = true;
-        // Rigid plate: whole row appears as one surface. No stagger cascade,
-        // no per-item choreography. 120ms linear-ease — System 7, not dock.
-        this._revealItems.forEach(item => { item.opacity = 255; });
-        this._reveal.ease({
-            opacity: 255,
-            duration: 120,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        this._revealItems.forEach((item, i) => {
+            if (item._armed) return;
+            item._armed = true;
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, i * 28, () => {
+                item.ease({
+                    opacity: 255,
+                    translation_y: 0,
+                    duration: 360,
+                    mode: Clutter.AnimationMode.EASE_OUT_BACK,
+                });
+                return GLib.SOURCE_REMOVE;
+            });
         });
     }
 
@@ -277,11 +348,23 @@ export default class ScatterBarExtension extends Extension {
     _hideReveal() {
         if (!this._revealShown) return;
         this._revealShown = false;
-        this._reveal.ease({
-            opacity: 0,
-            duration: 120,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-            onComplete: () => { if (this._reveal) this._reveal.visible = false; },
+        // Drop each tile back below the bar in reverse order — the last
+        // tile leaves first so the retreat reads as deliberate, not a
+        // collapse.
+        const items = [...this._revealItems].reverse();
+        items.forEach((item, i) => {
+            item._armed = false;
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, i * 14, () => {
+                item.ease({
+                    opacity: 0,
+                    translation_y: 120,
+                    scale_x: 1.0,
+                    scale_y: 1.0,
+                    duration: 260,
+                    mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                });
+                return GLib.SOURCE_REMOVE;
+            });
         });
     }
 
@@ -575,14 +658,19 @@ export default class ScatterBarExtension extends Extension {
             this._bar.set_size(monitor.width, BAR_HEIGHT);
         }
         if (this._reveal) {
-            // Reveal sits directly above the bar, flush to the right (where
-            // Apps lives).
-            const revealHeight = 88;
-            const revealWidth = Math.min(monitor.width, APPS.length * 120 + 24);
+            // Reveal sits directly above the bar, spanning the apps zone on
+            // the right side. Tiles live here but start 120px below their
+            // resting spot — they rise as the cursor crosses their columns.
+            const tileWidth = 140;
+            const tileGap = 16;
+            const revealHeight = 120;
+            const revealWidth = APPS.length * tileWidth + (APPS.length - 1) * tileGap + 48;
+            // Anchor near the right of the bar, leaving breathing space.
+            const rightMargin = 56;
             this._reveal.set_size(revealWidth, revealHeight);
             this._reveal.set_position(
-                monitor.x + monitor.width - revealWidth - 12,
-                monitor.y + monitor.height - BAR_HEIGHT - revealHeight - 8,
+                monitor.x + monitor.width - revealWidth - rightMargin,
+                monitor.y + monitor.height - BAR_HEIGHT - revealHeight + 12,
             );
         }
         if (this._overlay) {
@@ -594,18 +682,17 @@ export default class ScatterBarExtension extends Extension {
             );
         }
         if (this._desktop) {
-            // Bubble sits directly above the bar, anchored to the left
-            // where the >-< glyph lives — reads as a popup from Scatter,
-            // not floating text over the whole desktop.
-            const bubbleWidth = Math.min(640, Math.floor(monitor.width * 0.45));
-            // Allocate size so we can query the natural height.
+            // Speech bubble above Scatter's face in the bar's left column.
+            // One reply at a time, dismissed by ×. Anchored so it reads as
+            // speech from the character, not a broadcast over the desktop.
+            const bubbleWidth = Math.min(520, Math.floor(monitor.width * 0.38));
             this._desktop.set_size(bubbleWidth, -1);
             const [, natHeight] = this._desktop.get_preferred_height(bubbleWidth);
-            const height = Math.max(72, natHeight);
+            const height = Math.max(64, natHeight);
             const barTop = monitor.y + monitor.height - BAR_HEIGHT;
-            // Left-anchored — the bar has ~48px padding then the glyph.
-            const anchorX = monitor.x + 48;
-            this._desktop.set_position(anchorX, barTop - height - 8);
+            // Left-anchored to where the wordmark lives, with a gap above.
+            const anchorX = monitor.x + 56;
+            this._desktop.set_position(anchorX, barTop - height - 18);
         }
     }
 
@@ -660,34 +747,221 @@ export default class ScatterBarExtension extends Extension {
     // The tile tells the "app is expanding onto the desktop" story; GNOME's
     // compositor opens the window with its own animation. One animation,
     // no compositor race, no brittle window-created matching.
-    _launchFromTile(tile, cmd) {
+    _launchFromTile(tile, app) {
+        // Dispatch to the app's signature animation. Each app has its own
+        // entrance — Firefox leaps, Terminal cuts, etc. The signature is a
+        // function that drives the tile (and any satellite actors) with
+        // Clutter easing, then resolves when the launch should commit.
+        // Back-compat: accept a plain exec string for callers not yet
+        // migrated.
+        const appSpec = (typeof app === 'object' && app !== null)
+            ? app
+            : { exec: app, signature: null };
+        const signature = this._signatureFor(appSpec);
+        const launchFn = () => this._launch(appSpec.exec);
+
+        // Safety net: whatever the signature does, it can't block a launch
+        // beyond 1200ms and it can't leave the tile in a broken state.
+        let launched = false;
+        const launchOnce = () => {
+            if (launched) return;
+            launched = true;
+            launchFn();
+        };
+        const resetTile = () => {
+            tile.set_scale(1.0, 1.0);
+            tile.opacity = 255;
+            tile.translation_x = 0;
+            tile.translation_y = 0;
+            tile.rotation_angle_z = 0;
+            tile._armed = false;
+        };
+        const deadline = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1200, () => {
+            launchOnce();
+            return GLib.SOURCE_REMOVE;
+        });
+
+        try {
+            signature(tile, launchOnce, () => {
+                GLib.source_remove(deadline);
+                resetTile();
+                this._hideReveal();
+            });
+        } catch (e) {
+            log(`scatter-bar[${appSpec.label || 'app'}]: signature error ${e.message || e}`);
+            launchOnce();
+            resetTile();
+            this._hideReveal();
+        }
+    }
+
+    // Returns the signature function for a given app. Looks up by label;
+    // falls back to the generic scale-up. New apps drop in by adding a
+    // method named _signatureFooBar and wiring it here.
+    _signatureFor(appSpec) {
+        const label = (appSpec.label || '').toLowerCase();
+        if (label === 'firefox') return (t, launch, done) => this._signatureFirefox(t, launch, done);
+        return (t, launch, done) => this._signatureDefault(t, launch, done);
+    }
+
+    // Generic signature — scale-up + fade. Calls launch at 100ms into the
+    // arc so the window can open while the tile is still dissolving.
+    _signatureDefault(tile, launch, done) {
         tile.set_pivot_point(0.5, 0.5);
         tile.ease({
             scale_x: 1.6,
             scale_y: 1.6,
             opacity: 0,
-            duration: 220,
+            duration: 260,
             mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-            onComplete: () => {
-                tile.set_scale(1.0, 1.0);
-                tile.opacity = 255;
-            },
+            onComplete: () => done(),
         });
-        this._launch(cmd);
-        // Hide the reveal after the tile has visibly committed. Grace is
-        // short enough to feel rigid, long enough to let the eye track.
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 160, () => {
-            this._hideReveal();
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+            launch();
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    // Firefox — The Fox: anticipation crouch → coiled spring → arc leap
+    // across the canvas with amber trail → impact ring → dissolve.
+    // Pure Clutter — no sprite sheets. Built from transforms, satellite
+    // ember actors, and a scaled ring on impact.
+    _signatureFirefox(tile, launch, done) {
+        const monitor = Main.layoutManager.primaryMonitor;
+        if (!monitor) { return this._signatureDefault(tile, launch, done); }
+
+        const [tileX, tileY] = tile.get_transformed_position();
+        const [tileW, tileH] = [tile.width, tile.height];
+        const targetX = monitor.x + monitor.width / 2 - tileW / 2;
+        const targetY = monitor.y + monitor.height / 3 - tileH / 2;
+        const dx = targetX - tileX;
+        const dy = targetY - tileY;
+
+        tile.set_pivot_point(0.5, 1.0);  // bottom-center pivot for squash
+
+        // Spawn satellite embers — six small amber widgets trailing the arc.
+        const embers = [];
+        for (let i = 0; i < 6; i++) {
+            const e = new St.Widget({
+                style_class: 'scatter-ember',
+                width: 8,
+                height: 8,
+                opacity: 0,
+                reactive: false,
+            });
+            e.set_position(
+                tileX + tileW / 2 - 4,
+                tileY + tileH / 2 - 4,
+            );
+            Main.layoutManager.addChrome(e, { affectsInputRegion: false });
+            embers.push(e);
+        }
+
+        // Shockwave ring — spawned on impact, scales up and fades.
+        const ring = new St.Widget({
+            style_class: 'scatter-shockwave',
+            width: 24,
+            height: 24,
+            opacity: 0,
+            reactive: false,
+        });
+        ring.set_pivot_point(0.5, 0.5);
+        ring.set_position(targetX + tileW / 2 - 12, targetY + tileH / 2 - 12);
+        Main.layoutManager.addChrome(ring, { affectsInputRegion: false });
+
+        // Beat 1 — ANTICIPATION (0-180ms): squash low, pull slightly back.
+        tile.ease({
+            scale_x: 1.15, scale_y: 0.72,
+            translation_x: -18, translation_y: 8,
+            duration: 180,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        });
+
+        // Beat 2 — COIL (180-320ms): deeper crouch, hold.
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 180, () => {
+            tile.ease({
+                scale_x: 1.2, scale_y: 0.6,
+                translation_x: -26,
+                duration: 140,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            });
+            return GLib.SOURCE_REMOVE;
+        });
+
+        // Beat 3 — LEAP (320-720ms): arc across the canvas, stretched mid-flight.
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 320, () => {
+            tile.ease({
+                translation_x: dx,
+                translation_y: dy,
+                scale_x: 0.9, scale_y: 1.35,
+                rotation_angle_z: 12,
+                duration: 420,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            });
+            // Embers spawn along the arc at staggered delays.
+            embers.forEach((e, i) => {
+                const t = i / (embers.length - 1);
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, Math.floor(t * 320), () => {
+                    const arcX = tileX + tileW / 2 - 4 + dx * t;
+                    const arcY = tileY + tileH / 2 - 4 + dy * t - 40 * Math.sin(Math.PI * t);
+                    e.set_position(arcX, arcY);
+                    e.opacity = 255;
+                    e.ease({
+                        opacity: 0,
+                        translation_y: 24,
+                        duration: 520,
+                        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                    });
+                    return GLib.SOURCE_REMOVE;
+                });
+            });
+            // Fire the actual app launch mid-arc so the window opens
+            // as the fox is landing — no dead air.
+            launch();
+            return GLib.SOURCE_REMOVE;
+        });
+
+        // Beat 4 — IMPACT (720-900ms): squash on land, shockwave ring.
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 720, () => {
+            tile.ease({
+                scale_x: 1.25, scale_y: 0.78,
+                rotation_angle_z: 0,
+                duration: 160,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            });
+            ring.opacity = 255;
+            ring.ease({
+                scale_x: 6.0, scale_y: 6.0,
+                opacity: 0,
+                duration: 620,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            });
+            return GLib.SOURCE_REMOVE;
+        });
+
+        // Beat 5 — DISSOLVE (900-1100ms): fade the fox, clean up actors.
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 900, () => {
+            tile.ease({
+                opacity: 0,
+                duration: 180,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                onComplete: () => {
+                    embers.forEach(e => { try { e.destroy(); } catch (_) {} });
+                    try { ring.destroy(); } catch (_) {}
+                    done();
+                },
+            });
             return GLib.SOURCE_REMOVE;
         });
     }
 
     _flashGlyph() {
-        // Brief amber pulse on >-< to confirm an action fired silently.
-        const orig = this._glyph.get_style();
-        this._glyph.set_style('color: #ffb800;');
+        // Brief amber pulse on the wordmark to confirm an action fired.
+        if (!this._face) return;
+        const orig = this._face.get_style();
+        this._face.set_style('color: #ffb800;');
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, 420, () => {
-            if (this._glyph) this._glyph.set_style(orig);
+            if (this._face) this._face.set_style(orig);
             return GLib.SOURCE_REMOVE;
         });
     }

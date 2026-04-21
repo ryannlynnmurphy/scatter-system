@@ -14,7 +14,34 @@
     border: none;
     border-top: 1px solid rgba(255, 255, 255, 0.06);
     padding: 0 48px;
-    spacing: 0;
+    spacing: 24px;
+}
+
+/* Left column: SCATTER wordmark stacked above talk-to-scatter input.
+ * The speaker. Two lines of register, one voice. */
+.scatter-bar-speaker {
+    spacing: 4px;
+    min-width: 420px;
+    padding: 10px 0;
+}
+
+.scatter-bar-wordmark {
+    font-family: 'Inter', 'Helvetica Neue', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: #c8c8c8;
+    padding-bottom: 2px;
+}
+.scatter-bar-wordmark.listening {
+    color: #e8e8e8;
+}
+
+/* Apps zone: right side of the bar, empty at rest. Tiles live in the
+ * _reveal layer positioned above this zone and animate up on mouse-cross. */
+.scatter-bar-apps-zone {
+    background-color: transparent;
 }
 
 /* The history handle: a small typographic mark at the far left. Only
@@ -64,8 +91,8 @@
     border-radius: 0;
     caret-color: #ffb800;
     caret-size: 2;
-    padding: 0 0 0 56px;
-    min-width: 400px;
+    padding: 0;
+    min-width: 380px;
 }
 
 .scatter-bar-entry:focus {
@@ -108,48 +135,66 @@
 
 /* ── Reveal: cascade of apps above the bar ─────────────────────────────── */
 
+/* Reveal layer — transparent container; tiles animate in individually. */
 .scatter-reveal {
-    background-color: #0a0a0a;
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 0;
-    padding: 24px;
-    spacing: 20px;
+    background-color: transparent;
+    border: none;
+    padding: 0 24px;
+    spacing: 16px;
 }
 
 .scatter-reveal-item {
-    background-color: transparent;
+    background-color: rgba(15, 15, 15, 0.82);
     background-gradient-direction: none;
-    border: none;
-    border-radius: 0;
-    padding: 12px 20px;
-    min-width: 120px;
-    min-height: 96px;
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 8px;
+    padding: 16px 22px;
+    min-width: 140px;
+    min-height: 100px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
 }
 .scatter-reveal-item:hover {
-    background-color: transparent;
+    background-color: rgba(20, 20, 20, 0.92);
+    border-color: rgba(255, 184, 0, 0.3);
 }
 .scatter-reveal-item:hover .scatter-reveal-glyph {
     color: #ffb800;
 }
 .scatter-reveal-item:hover .scatter-reveal-label {
-    color: #e5e5e5;
+    color: #f5f2ea;
 }
 
 .scatter-reveal-glyph {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 32px;
+    font-size: 36px;
     font-weight: 500;
-    color: #c8c8c8;
+    color: #d8d8d8;
     text-align: center;
-    padding-bottom: 14px;
+    padding-bottom: 12px;
 }
 .scatter-reveal-label {
     font-family: 'Inter', sans-serif;
     font-size: 11px;
     font-weight: 600;
-    letter-spacing: 0.24em;
-    color: #8a8a8a;
+    letter-spacing: 0.22em;
+    color: #9a9a9a;
     text-align: center;
+    text-transform: lowercase;
+}
+
+/* Firefox leap — satellite ember and impact shockwave. */
+.scatter-ember {
+    background-color: #ffb800;
+    border-radius: 4px;
+    box-shadow: 0 0 10px rgba(255, 184, 0, 0.7),
+                0 0 22px rgba(255, 184, 0, 0.35);
+}
+
+.scatter-shockwave {
+    background-color: transparent;
+    border: 2px solid rgba(255, 184, 0, 0.65);
+    border-radius: 999px;
+    box-shadow: 0 0 16px rgba(255, 184, 0, 0.45);
 }
 
 /* ── Response overlay ──────────────────────────────────────────────────── */
