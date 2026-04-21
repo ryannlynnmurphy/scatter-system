@@ -78,6 +78,7 @@ export default class ScatterBarExtension extends Extension {
         this._wireHoverReveal();
         this._place();
         this._startStatusClock();
+        this._refreshHistoryHandle();
 
         this._monitorsChangedId = Main.layoutManager.connect(
             'monitors-changed', () => this._place());
@@ -129,6 +130,20 @@ export default class ScatterBarExtension extends Extension {
             reactive: true,
             track_hover: true,
         });
+
+        // Far left: the history handle — a small typographic mark that
+        // becomes visible only when chats exist. Clicking opens the Journal
+        // so the forgetful user doesn't have to remember a recall verb.
+        this._historyHandle = new St.Button({
+            style_class: 'scatter-bar-history',
+            label: '≡',
+            can_focus: true,
+            track_hover: true,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        this._historyHandle.visible = false;
+        this._historyHandle.connect('clicked', () => this._openJournal());
+        this._bar.add_child(this._historyHandle);
 
         // Left: the iconic glyph
         this._glyph = new St.Label({
@@ -385,6 +400,41 @@ export default class ScatterBarExtension extends Extension {
             route: 'local:greet',
             model: 'scatter',
         });
+    }
+
+    _openJournal() {
+        // Spawns the webkit Journal inspector. It's a stepping-stone until
+        // history lands natively on the canvas — the handle lets users
+        // reach their chats without remembering the recall verb.
+        try {
+            GLib.spawn_command_line_async(
+                'python3 /home/ryannlynnmurphy/scatter-system/scatter/launcher.py',
+            );
+        } catch (e) {
+            this._showResponse('error', `could not open journal: ${e.message || e}`, 4000);
+        }
+    }
+
+    // Check if a chat log exists on disk; show/hide the history handle
+    // accordingly. Called on enable and after each reply.
+    _refreshHistoryHandle() {
+        if (!this._historyHandle) return;
+        try {
+            const logFile = Gio.File.new_for_path(
+                GLib.get_home_dir() + '/.scatter/chats.jsonl',
+            );
+            const [exists, size] = (() => {
+                try {
+                    const info = logFile.query_info('standard::size', 0, null);
+                    return [true, info.get_size()];
+                } catch (_) {
+                    return [false, 0];
+                }
+            })();
+            this._historyHandle.visible = exists && size > 0;
+        } catch (_) {
+            this._historyHandle.visible = false;
+        }
     }
 
     _hideResponse() {
@@ -677,6 +727,7 @@ export default class ScatterBarExtension extends Extension {
                             ms: data.ms,
                         });
                         this._speak(reply);
+                        this._refreshHistoryHandle();
                     }
                 } catch (e) {
                     this._showResponse('error', `${e.message || e}`, 4000);

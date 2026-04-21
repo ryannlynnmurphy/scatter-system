@@ -17,6 +17,28 @@
     spacing: 0;
 }
 
+/* The history handle: a small typographic mark at the far left. Only
+ * visible when chats exist. Tooltip says "your chats" — clicking opens
+ * the Journal inspector. Weight of a comma, not a button. */
+.scatter-bar-history {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 18px;
+    font-weight: 400;
+    color: #5a5a5a;
+    background-color: transparent;
+    background-gradient-direction: none;
+    border: none;
+    border-radius: 0;
+    padding: 0 10px 0 0;
+    min-width: 28px;
+    min-height: 28px;
+    letter-spacing: 0;
+}
+.scatter-bar-history:hover {
+    color: #c8c8c8;
+    background-color: transparent;
+}
+
 /* The glyph owns its own column. No one shares space with it.
  * Faint green glow marks >-< as the living eye of the machine — local,
  * ready, watching. Soft enough to read as ambient light, not neon. */
