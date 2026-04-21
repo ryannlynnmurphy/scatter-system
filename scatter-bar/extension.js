@@ -594,15 +594,18 @@ export default class ScatterBarExtension extends Extension {
             );
         }
         if (this._desktop) {
-            // Bubble: upper-center, max ~56% width so long replies wrap
-            // without feeling like a billboard. Height auto.
-            const desktopWidth = Math.min(1040, Math.floor(monitor.width * 0.56));
-            const verticalInset = Math.floor((monitor.height - BAR_HEIGHT) * 0.22);
-            this._desktop.set_size(desktopWidth, -1);
-            this._desktop.set_position(
-                monitor.x + Math.floor((monitor.width - desktopWidth) / 2),
-                monitor.y + verticalInset,
-            );
+            // Bubble sits directly above the bar, anchored to the left
+            // where the >-< glyph lives — reads as a popup from Scatter,
+            // not floating text over the whole desktop.
+            const bubbleWidth = Math.min(640, Math.floor(monitor.width * 0.45));
+            // Allocate size so we can query the natural height.
+            this._desktop.set_size(bubbleWidth, -1);
+            const [, natHeight] = this._desktop.get_preferred_height(bubbleWidth);
+            const height = Math.max(72, natHeight);
+            const barTop = monitor.y + monitor.height - BAR_HEIGHT;
+            // Left-anchored — the bar has ~48px padding then the glyph.
+            const anchorX = monitor.x + 48;
+            this._desktop.set_position(anchorX, barTop - height - 8);
         }
     }
 

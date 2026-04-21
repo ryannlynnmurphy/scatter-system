@@ -515,6 +515,35 @@ class StudioHandler(http.server.BaseHTTPRequestHandler):
                 limit_i = 50
             entries = sc.audit_read(limit=limit_i)
             self.send_json({"entries": entries, "count": len(entries)})
+        elif self.path.startswith("/api/chats"):
+            # Proxy the router's chat log so the inspector can render it
+            # without cross-origin fetches. Keeps everything same-origin.
+            _, limit = self._parse_query(["_", "limit"])
+            try:
+                limit_i = int(limit) if limit else 100
+            except ValueError:
+                limit_i = 100
+            try:
+                with urlopen(
+                    Request(f"http://127.0.0.1:8787/chats?limit={limit_i}"),
+                    timeout=4,
+                ) as resp:
+                    self.send_json(json.loads(resp.read()))
+            except Exception as e:
+                self.send_json({"entries": [], "error": str(e)})
+        elif self.path.startswith("/api/chat-break"):
+            # POST-like GET trigger for the 'new chat' button — proxies to
+            # the router's /chats/break endpoint.
+            try:
+                req = Request(
+                    "http://127.0.0.1:8787/chats/break",
+                    data=b"",
+                    method="POST",
+                )
+                with urlopen(req, timeout=4) as resp:
+                    self.send_json(json.loads(resp.read()))
+            except Exception as e:
+                self.send_json({"status": "error", "error": str(e)})
         elif self.path.startswith("/api/watts"):
             self.send_json({
                 "total_joules": sc.watts_total(),
@@ -1545,13 +1574,9 @@ body {
         <button class="sub-link" onclick="newChat()">new chat</button>
     </nav>
 
-    <div class="rail-foot">
-        <div class="watts-breakdown" id="watts-breakdown"></div>
-        <div class="watts-row">
-            <span><button class="theme-toggle" id="theme-toggle" onclick="toggleTheme()">theme</button> watts</span>
-            <span><span class="j-value" id="watts-value">0.00</span> J</span>
-        </div>
-    </div>
+    <!-- Watts and theme controls live at /stats and /api/theme respectively.
+         Not surfaced in the rail chrome — only the one person who cares
+         about tok/J can summon them. -->
 </aside>
 
 <main class="canvas">
@@ -1668,13 +1693,11 @@ function escapeHTML(s) {
 // Reads chat exchanges from the router (/chats). Only conversations show
 // up here — not the full database of system events. The full audit is a
 // separate, less-prominent view.
-const ROUTER_CHATS_URL = 'http://127.0.0.1:8787/chats?limit=100';
-
 async function loadJournal() {
     const list = document.getElementById('journal-list');
     list.innerHTML = '<div class="empty-note">loading…</div>';
     try {
-        const resp = await fetch(ROUTER_CHATS_URL);
+        const resp = await fetch('/api/chats?limit=100');
         const data = await resp.json();
         const entries = (data.entries || []);
         if (entries.length === 0) {
@@ -1710,7 +1733,7 @@ function renderChatExchange(e) {
 
 async function newChat() {
     try {
-        await fetch('http://127.0.0.1:8787/chats/break', { method: 'POST' });
+        await fetch('/api/chat-break');
     } catch (e) { /* router may be down; UI still refreshes */ }
     await loadJournal();
 }
@@ -1796,25 +1819,8 @@ async function toggleTheme() {
     } catch (e) { /* silent */ }
 }
 
-// ---------- watts footer ticker ----------
-async function updateWatts() {
-    try {
-        const resp = await fetch('/api/watts');
-        const data = await resp.json();
-        document.getElementById('watts-value').textContent = Number(data.total_joules || 0).toFixed(2);
-        const bd = document.getElementById('watts-breakdown');
-        const rows = (data.by_source || []).filter(r => r.tokens > 0);
-        if (!rows.length) { bd.innerHTML = ''; return; }
-        const shortSource = s => s.replace(/^model:/, '');
-        bd.innerHTML = rows.map(r =>
-            `<div class="row"><span class="src">${shortSource(r.source)}</span>` +
-            `<span><span class="tpj">${r.tokens_per_joule ?? '—'}</span> tok/J ` +
-            `<span style="color:#444"> · ${r.tokens} tok · ${r.joules.toFixed(2)} J</span></span></div>`
-        ).join('');
-    } catch (e) { /* silent */ }
-}
-updateWatts();
-setInterval(updateWatts, 5000);
+// Watts/theme ticker retired from the rail. Data still available at
+// /api/watts for anyone who wants it.
 
 // Inspector opens on the journal — the prompt lives in the bar.
 loadJournal();
