@@ -44,12 +44,21 @@ const MOTION_RISE_PX = 16;
 //
 // Order: tiles render bottom-up (column rises out of the bowtie), so the
 // first entry sits closest to the face.
+// Phase 1 tool ring. Bottom-up = closest to the bowtie first; the column
+// rises out of Scatter's face. Order is intent-frequency ascending: web
+// nearest the hand, system tools furthest. Eight visible orbs — the cap
+// before the column overruns 1080p screens. Phase 2 tools (Excalidraw,
+// VLC, Blanket, Stirling-PDF, etc.) are reachable via prompt verbs even
+// without a visible orb (see ACTION_MAP).
 const APPS = [
-    { label: 'Scatter Code', exec: 'gnome-terminal -- bash -lc "cd ~/scatter-system && exec bash"', glyph: '</>', brand: 'scatter-code' },
-    { label: 'Claude Code',  exec: 'gnome-terminal -- bash -lc "claude || bash"',                   glyph: '[c]', brand: 'claude-code' },
-    { label: 'Files',        exec: 'nautilus',  desktop_id: 'org.gnome.Nautilus.desktop',           glyph: '[ ]', brand: 'files' },
-    { label: 'Firefox',      exec: 'firefox',   desktop_id: 'firefox.desktop',                      glyph: ' @ ', brand: 'firefox' },
-    { label: 'Terminal',     exec: 'gnome-terminal', desktop_id: 'org.gnome.Terminal.desktop',      glyph: ' _ ', brand: 'terminal' },
+    { label: 'Scatter',      exec: 'bash -lc "$HOME/scatter-system/scatter-browser/launcher.sh"',                            desktop_id: 'scatter-browser.desktop',         glyph: '>-<', brand: 'scatter-browser' },
+    { label: 'AppFlowy',     exec: 'flatpak run io.appflowy.AppFlowy',                                                       desktop_id: 'io.appflowy.AppFlowy.desktop',    glyph: '[]',  brand: 'appflowy' },
+    { label: 'OnlyOffice',   exec: 'flatpak run org.onlyoffice.desktopeditors',                                              desktop_id: 'org.onlyoffice.desktopeditors.desktop', glyph: '|=|', brand: 'onlyoffice' },
+    { label: 'Zotero',       exec: 'flatpak run org.zotero.Zotero',                                                          desktop_id: 'org.zotero.Zotero.desktop',       glyph: '{ }', brand: 'zotero' },
+    { label: 'Files',        exec: 'nautilus',                                                                               desktop_id: 'org.gnome.Nautilus.desktop',      glyph: '[ ]', brand: 'files' },
+    { label: 'Scatter Code', exec: 'gnome-terminal -- bash -lc "cd ~/scatter-system && exec bash"',                          glyph: '</>', brand: 'scatter-code' },
+    { label: 'Claude Code',  exec: 'gnome-terminal -- bash -lc "claude || bash"',                                            glyph: '[c]', brand: 'claude-code' },
+    { label: 'Terminal',     exec: 'gnome-terminal',                                                                         desktop_id: 'org.gnome.Terminal.desktop',      glyph: ' _ ', brand: 'terminal' },
 ];
 
 // Action-modality rules. Client-side first pass — zero-latency and doesn't
@@ -61,16 +70,47 @@ const APPS = [
 // known target keyword anywhere after it.
 const ACTION_VERBS = /\b(open|launch|start|run|show|fire up|pull up|bring up|go to)\b/i;
 const ACTION_MAP = {
-    'firefox':      'firefox',
-    'browser':      'firefox',
-    'web':          'firefox',
+    'scatter browser': 'bash -lc "$HOME/scatter-system/scatter-browser/launcher.sh"',
+    'browser':         'bash -lc "$HOME/scatter-system/scatter-browser/launcher.sh"',
+    'web':             'bash -lc "$HOME/scatter-system/scatter-browser/launcher.sh"',
+    'librewolf':       'bash -lc "$HOME/scatter-system/scatter-browser/launcher.sh"',
+    'firefox':         'bash -lc "$HOME/scatter-system/scatter-browser/launcher.sh"',
     'files':        'nautilus',
     'file manager': 'nautilus',
     'finder':       'nautilus',
     'terminal':     'gnome-terminal',
     'shell':        'gnome-terminal',
     'console':      'gnome-terminal',
-    'scatter':      'xdg-open http://127.0.0.1:8787',
+    // Phase 1 tool-ring intents — verbs first so the prompt feels like
+    // language not a launcher. Climate-hacker register: low chrome, high
+    // intent. Each verb resolves to a flatpak run if installed, else a
+    // friendly fallback (TBD via the router on miss).
+    'note':         'flatpak run io.appflowy.AppFlowy',
+    'notes':        'flatpak run io.appflowy.AppFlowy',
+    'appflowy':     'flatpak run io.appflowy.AppFlowy',
+    'write':        'flatpak run org.onlyoffice.desktopeditors',
+    'document':     'flatpak run org.onlyoffice.desktopeditors',
+    'spreadsheet':  'flatpak run org.onlyoffice.desktopeditors',
+    'slides':       'flatpak run org.onlyoffice.desktopeditors',
+    'onlyoffice':   'flatpak run org.onlyoffice.desktopeditors',
+    'research':     'flatpak run org.zotero.Zotero',
+    'cite':         'flatpak run org.zotero.Zotero',
+    'zotero':       'flatpak run org.zotero.Zotero',
+    'paper':        'flatpak run org.zotero.Zotero',
+    'draw':         'bash -lc "$HOME/scatter-system/scatter-browser/launcher.sh --new-window https://excalidraw.com"',
+    'sketch':       'bash -lc "$HOME/scatter-system/scatter-browser/launcher.sh --new-window https://excalidraw.com"',
+    'whiteboard':   'bash -lc "$HOME/scatter-system/scatter-browser/launcher.sh --new-window https://excalidraw.com"',
+    'flowchart':    'bash -lc "$HOME/scatter-system/scatter-browser/launcher.sh --new-window https://excalidraw.com"',
+    'excalidraw':   'bash -lc "$HOME/scatter-system/scatter-browser/launcher.sh --new-window https://excalidraw.com"',
+    'play':         'flatpak run org.videolan.VLC',
+    'video':        'flatpak run org.videolan.VLC',
+    'movie':        'flatpak run org.videolan.VLC',
+    'vlc':          'flatpak run org.videolan.VLC',
+    'focus':        'flatpak run com.rafaelmardojai.Blanket',
+    'rain':         'flatpak run com.rafaelmardojai.Blanket',
+    'ambient':      'flatpak run com.rafaelmardojai.Blanket',
+    'blanket':      'flatpak run com.rafaelmardojai.Blanket',
+    // Scatter-native + dev — kept last so longer matches above win first.
     'scatter code': 'gnome-terminal -- bash -lc "cd ~/scatter-system && exec bash"',
     'claude':       'gnome-terminal -- bash -lc "claude || bash"',
     'claude code':  'gnome-terminal -- bash -lc "claude || bash"',
@@ -132,30 +172,16 @@ export default class ScatterBarExtension extends Extension {
 
         // The bowtie. Scatter's face — and the apps trigger. Clicking it
         // summons the reveal layer; clicking again dismisses it. Hover and
-        // press are felt in motion, not color.
-        //
-        // Composition: the pixel-art mascot rides ON TOP of the `>-<`
-        // bowtie text. Read as one figure — Scatter wearing her bow tie.
-        // ZWNJs around the dash defeat JBM/Victor Mono ligatures; the
-        // stylesheet also kills liga/calt/dlig on .scatter-bar-bowtie.
-        const glyphStack = new St.BoxLayout({
-            vertical: true,
-            style_class: 'scatter-bar-glyph-stack',
+        // press are felt in motion, not color. Plain `>-<` text — the
+        // mascot.png stack was being eaten by the theme; the glyph IS
+        // Scatter's face on its own. Stylesheet kills liga/calt so the
+        // dash doesn't ligature into an arrow.
+        const bowtieLabel = new St.Label({
+            text: '>-<',
+            style_class: 'scatter-bar-bowtie',
             x_align: Clutter.ActorAlign.CENTER,
             y_align: Clutter.ActorAlign.CENTER,
         });
-        const mascotIcon = new St.Icon({
-            gicon: Gio.icon_new_for_string(this.path + '/mascot.png'),
-            icon_size: 26,
-            style_class: 'scatter-bar-mascot',
-        });
-        const bowtieLabel = new St.Label({
-            text: '>‌-‌<',
-            style_class: 'scatter-bar-bowtie',
-            x_align: Clutter.ActorAlign.CENTER,
-        });
-        glyphStack.add_child(mascotIcon);
-        glyphStack.add_child(bowtieLabel);
 
         this._glyph = new St.Button({
             style_class: 'scatter-bar-glyph',
@@ -163,7 +189,7 @@ export default class ScatterBarExtension extends Extension {
             can_focus: true,
             track_hover: true,
             reactive: true,
-            child: glyphStack,
+            child: bowtieLabel,
         });
         this._glyph.set_pivot_point(0.5, 0.5);
         this._glyph.connect('clicked', () => this._toggleReveal());
@@ -214,8 +240,11 @@ export default class ScatterBarExtension extends Extension {
             vertical: true,
             reactive: false,
         });
-        this._reveal.visible = true;  // container always present; items animate in
-        this._reveal.opacity = 255;
+        // Hidden by default — clicking the bowtie summons it, clicking again
+        // dismisses it. Was previously visible-but-empty, which let half-armed
+        // orbs leak onto the canvas as stuck pills.
+        this._reveal.visible = false;
+        this._reveal.opacity = 0;
 
         this._revealItems = [];
         APPS.forEach((app, i) => {
@@ -225,6 +254,10 @@ export default class ScatterBarExtension extends Extension {
                 track_hover: true,
                 reactive: true,
             });
+            // Force the orb size via JS — CSS width/height alone gets eaten
+            // by the inherited shell theme, which is what made these render
+            // as narrow stadium pills instead of 96px circles.
+            item.set_size(96, 96);
             // Brand tint — one CSS class per app, per stylesheet.
             if (app.brand) item.add_style_class_name(`scatter-orb-${app.brand}`);
 
@@ -347,9 +380,14 @@ export default class ScatterBarExtension extends Extension {
     }
 
     _showReveal() {
-        // Retained for back-compat (toggle path). Arms all tiles at once.
+        // Bowtie click → arm all tiles. Container becomes visible (it's
+        // hidden at rest), then each orb rises with a small stagger.
         this._cancelHideTimer();
         this._revealShown = true;
+        if (this._reveal) {
+            this._reveal.visible = true;
+            this._reveal.opacity = 255;
+        }
         this._revealItems.forEach((item, i) => {
             if (item._armed) return;
             item._armed = true;
@@ -407,8 +445,10 @@ export default class ScatterBarExtension extends Extension {
         this._revealShown = false;
         // Drop each tile back below the bar in reverse order — the last
         // tile leaves first so the retreat reads as deliberate, not a
-        // collapse.
+        // collapse. Once every tile has finished falling, the container
+        // itself goes invisible so nothing can leak through.
         const items = [...this._revealItems].reverse();
+        const totalMs = items.length * 14 + 280;
         items.forEach((item, i) => {
             item._armed = false;
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, i * 14, () => {
@@ -422,6 +462,13 @@ export default class ScatterBarExtension extends Extension {
                 });
                 return GLib.SOURCE_REMOVE;
             });
+        });
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, totalMs, () => {
+            if (this._reveal && !this._revealShown) {
+                this._reveal.visible = false;
+                this._reveal.opacity = 0;
+            }
+            return GLib.SOURCE_REMOVE;
         });
     }
 
@@ -740,7 +787,11 @@ export default class ScatterBarExtension extends Extension {
     // method named _signatureFooBar and wiring it here.
     _signatureFor(appSpec) {
         const label = (appSpec.label || '').toLowerCase();
-        if (label === 'firefox')      return (t, l, d) => this._signatureFirefox(t, l, d);
+        // 'Scatter' (the browser, brand=scatter-browser) gets the wolf
+        // signature — stalk + sprint + sink-into-shadow. Distinct from the
+        // bowtie's bloom by way of the brand key.
+        if ((appSpec.brand || '') === 'scatter-browser')
+                                      return (t, l, d) => this._signatureScatterBrowser(t, l, d);
         if (label === 'scatter')      return (t, l, d) => this._signatureScatter(t, l, d);
         if (label === 'scatter code') return (t, l, d) => this._signatureScatterCode(t, l, d);
         if (label === 'claude code')  return (t, l, d) => this._signatureClaudeCode(t, l, d);
@@ -767,11 +818,12 @@ export default class ScatterBarExtension extends Extension {
         });
     }
 
-    // Firefox — The Fox: anticipation crouch → coiled spring → arc leap
-    // across the canvas with amber trail → impact ring → dissolve.
-    // Pure Clutter — no sprite sheets. Built from transforms, satellite
-    // ember actors, and a scaled ring on impact.
-    _signatureFirefox(tile, launch, done) {
+    // Scatter Browser — The Wolf: stalk → lock-on → straight-line sprint →
+    // sink into shadow. Where the fox leapt in an arc with embers, the wolf
+    // moves low and direct. No bounce, no curve. The trail is a charcoal
+    // shadow that absorbs the orb at the end. Same Clutter primitives,
+    // different physicality.
+    _signatureScatterBrowser(tile, launch, done) {
         const monitor = Main.layoutManager.primaryMonitor;
         if (!monitor) { return this._signatureDefault(tile, launch, done); }
 
@@ -782,117 +834,80 @@ export default class ScatterBarExtension extends Extension {
         const dx = targetX - tileX;
         const dy = targetY - tileY;
 
-        tile.set_pivot_point(0.5, 1.0);  // bottom-center pivot for squash
+        tile.set_pivot_point(0.5, 0.5);
 
-        // Spawn satellite embers — six small amber widgets trailing the arc.
-        const embers = [];
-        for (let i = 0; i < 6; i++) {
-            const e = new St.Widget({
-                style_class: 'scatter-ember',
-                width: 8,
-                height: 8,
-                opacity: 0,
-                reactive: false,
-            });
-            e.set_position(
-                tileX + tileW / 2 - 4,
-                tileY + tileH / 2 - 4,
-            );
-            Main.layoutManager.addChrome(e, { affectsInputRegion: false });
-            embers.push(e);
-        }
-
-        // Shockwave ring — spawned on impact, scales up and fades.
-        const ring = new St.Widget({
-            style_class: 'scatter-shockwave',
-            width: 24,
-            height: 24,
+        // Shadow-trail: a single elongated charcoal mark drawn behind the
+        // wolf as it sprints. Stretched, low-opacity, no glow. The wolf
+        // doesn't burn the canvas; it leaves a streak of weight.
+        const shadow = new St.Widget({
+            width: 10,
+            height: 10,
             opacity: 0,
             reactive: false,
         });
-        ring.set_pivot_point(0.5, 0.5);
-        ring.set_position(targetX + tileW / 2 - 12, targetY + tileH / 2 - 12);
-        Main.layoutManager.addChrome(ring, { affectsInputRegion: false });
+        shadow.set_position(tileX + tileW / 2 - 5, tileY + tileH / 2 - 5);
+        shadow.set_style('background-color: #0a0a0a; border-radius: 999px;');
+        Main.layoutManager.addChrome(shadow, { affectsInputRegion: false });
 
-        // Beat 1 — ANTICIPATION (0-180ms): squash low, pull slightly back.
+        // Beat 1 — STALK (0-220ms): drop low and forward, body lengthening.
+        // Wolves don't squash for a leap; they flatten to track. No backwards
+        // pull — the wolf is already pointed at the prey.
         tile.ease({
-            scale_x: 1.15, scale_y: 0.72,
-            translation_x: -18, translation_y: 8,
-            duration: 180,
+            scale_x: 1.10, scale_y: 0.86,
+            translation_y: 4,
+            duration: 220,
             mode: Clutter.AnimationMode.EASE_OUT_QUAD,
         });
 
-        // Beat 2 — COIL (180-320ms): deeper crouch, hold.
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 180, () => {
+        // Beat 2 — LOCK (220-360ms): hold. The pause is the threat. Eyes on.
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 220, () => {
             tile.ease({
-                scale_x: 1.2, scale_y: 0.6,
-                translation_x: -26,
+                scale_x: 1.06, scale_y: 0.92,
                 duration: 140,
                 mode: Clutter.AnimationMode.EASE_OUT_QUAD,
             });
             return GLib.SOURCE_REMOVE;
         });
 
-        // Beat 3 — LEAP (320-720ms): arc across the canvas, stretched mid-flight.
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 320, () => {
+        // Beat 3 — SPRINT (360-720ms): straight line, no arc, no rotation,
+        // body stretched horizontally in the direction of travel. The shadow
+        // trail extends behind it. Linear easing — wolves don't decelerate
+        // mid-run.
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 360, () => {
             tile.ease({
                 translation_x: dx,
                 translation_y: dy,
-                scale_x: 0.9, scale_y: 1.35,
-                rotation_angle_z: 12,
-                duration: 420,
+                scale_x: 1.35, scale_y: 0.78,
+                duration: 360,
+                mode: Clutter.AnimationMode.LINEAR,
+            });
+            // Shadow grows along the path — single streak, not embers.
+            shadow.opacity = 110;
+            shadow.set_pivot_point(0.5, 0.5);
+            shadow.ease({
+                translation_x: dx,
+                translation_y: dy,
+                scale_x: 14.0, scale_y: 0.4,
+                opacity: 0,
+                duration: 480,
                 mode: Clutter.AnimationMode.EASE_OUT_QUAD,
             });
-            // Embers spawn along the arc at staggered delays.
-            embers.forEach((e, i) => {
-                const t = i / (embers.length - 1);
-                GLib.timeout_add(GLib.PRIORITY_DEFAULT, Math.floor(t * 320), () => {
-                    const arcX = tileX + tileW / 2 - 4 + dx * t;
-                    const arcY = tileY + tileH / 2 - 4 + dy * t - 40 * Math.sin(Math.PI * t);
-                    e.set_position(arcX, arcY);
-                    e.opacity = 255;
-                    e.ease({
-                        opacity: 0,
-                        translation_y: 24,
-                        duration: 520,
-                        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-                    });
-                    return GLib.SOURCE_REMOVE;
-                });
-            });
-            // Fire the actual app launch mid-arc so the window opens
-            // as the fox is landing — no dead air.
+            // Window opens mid-sprint — the wolf carries it in.
             launch();
             return GLib.SOURCE_REMOVE;
         });
 
-        // Beat 4 — IMPACT (720-900ms): squash on land, shockwave ring.
+        // Beat 4 — ABSORB (720-1020ms): no impact bounce. The wolf sinks
+        // into a charcoal pool — opacity drops, scale collapses. The window
+        // is already on screen by now.
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, 720, () => {
             tile.ease({
-                scale_x: 1.25, scale_y: 0.78,
-                rotation_angle_z: 0,
-                duration: 160,
-                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-            });
-            ring.opacity = 255;
-            ring.ease({
-                scale_x: 6.0, scale_y: 6.0,
+                scale_x: 1.0, scale_y: 0.2,
                 opacity: 0,
-                duration: 620,
-                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-            });
-            return GLib.SOURCE_REMOVE;
-        });
-
-        // Beat 5 — DISSOLVE (900-1100ms): fade the fox, clean up actors.
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 900, () => {
-            tile.ease({
-                opacity: 0,
-                duration: 180,
+                duration: 300,
                 mode: Clutter.AnimationMode.EASE_OUT_QUAD,
                 onComplete: () => {
-                    embers.forEach(e => { try { e.destroy(); } catch (_) {} });
-                    try { ring.destroy(); } catch (_) {}
+                    try { shadow.destroy(); } catch (_) {}
                     done();
                 },
             });

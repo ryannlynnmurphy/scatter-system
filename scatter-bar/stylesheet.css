@@ -21,42 +21,39 @@
  * bowtie. Reactive but not chromed — no pill, no border, no hover background.
  * The press is felt in motion. */
 .scatter-bar-glyph {
-    min-width: 72px;
+    min-width: 88px;
+    min-height: 64px;
     background-color: transparent;
     background-gradient-direction: none;
-    border: none;
+    border: none !important;
     border-radius: 0;
-    padding: 0;
+    padding: 0 16px;
+    box-shadow: none !important;
 }
 .scatter-bar-glyph:hover,
 .scatter-bar-glyph:focus,
 .scatter-bar-glyph:active {
-    background-color: transparent;
-    border: none;
-    box-shadow: none;
-}
-.scatter-bar-glyph-stack {
-    spacing: 2px;
-}
-.scatter-bar-mascot {
-    icon-size: 26px;
-    color: #f5f2ea;
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
 }
 .scatter-bar-bowtie {
     font-family: 'JetBrains Mono', 'Victor Mono', monospace;
-    font-size: 22px;
-    font-weight: 500;
-    color: #d8d8d8;
+    font-size: 28px;
+    font-weight: 600;
+    color: #f5f2ea;
     letter-spacing: 0.06em;
-    text-shadow: 0 0 10px rgba(74, 222, 128, 0.45),
-                 0 0 22px rgba(74, 222, 128, 0.20);
+    text-shadow: 0 0 12px rgba(74, 222, 128, 0.55),
+                 0 0 26px rgba(74, 222, 128, 0.25);
     font-feature-settings: "liga" 0, "calt" 0, "dlig" 0, "clig" 0;
     font-variant-ligatures: none;
 }
 .scatter-bar-glyph:hover .scatter-bar-bowtie,
 .scatter-bar-glyph:focus .scatter-bar-bowtie,
 .scatter-bar-glyph:active .scatter-bar-bowtie {
-    color: #f5f2ea;
+    color: #ffffff;
+    text-shadow: 0 0 14px rgba(74, 222, 128, 0.75),
+                 0 0 30px rgba(74, 222, 128, 0.35);
 }
 
 /* The entry stretches across the bar. Placeholder is quiet; the caret is
@@ -98,24 +95,28 @@
     spacing: 18px;
 }
 
-/* Each orb is a circle. Width / height match the JS sizing constant
- * (96px diameter). Background is near-black with a per-app brand ring;
- * the icon or glyph sits centered. No labels — the orbs are pure. */
+/* Each orb is a circle. Width / height match the JS set_size(96, 96) call
+ * (the JS path is what actually enforces the size — CSS width was being
+ * overridden by the inherited shell theme's .button rules). Background is
+ * near-black with a per-app brand ring; the icon or glyph sits centered.
+ * No labels — the orbs are pure. */
 .scatter-reveal-item {
-    background-color: rgba(12, 12, 12, 0.94);
+    background-color: rgba(12, 12, 12, 0.94) !important;
     background-gradient-direction: none;
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 999px;
-    width: 96px;
-    height: 96px;
-    min-width: 96px;
-    min-height: 96px;
-    padding: 0;
+    background-image: none !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    border-radius: 999px !important;
+    width: 96px !important;
+    height: 96px !important;
+    min-width: 96px !important;
+    min-height: 96px !important;
+    padding: 0 !important;
+    margin: 0 !important;
     box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
 }
 .scatter-reveal-item:hover {
-    background-color: rgba(18, 18, 18, 1.0);
-    border-color: rgba(255, 184, 0, 0.45);
+    background-color: rgba(18, 18, 18, 1.0) !important;
+    border-color: rgba(255, 184, 0, 0.45) !important;
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55),
                 0 0 0 2px rgba(255, 184, 0, 0.35);
 }
@@ -123,6 +124,8 @@
 .scatter-orb-inner {
     width: 96px;
     height: 96px;
+    min-width: 96px;
+    min-height: 96px;
 }
 
 .scatter-reveal-glyph {
@@ -140,20 +143,68 @@
 }
 
 /* ── Per-app brand tints — orb ring + glyph color ─────────────────────── */
-/* Each app gets a recognizable hue. Ring is subtle at rest, lights up on
- * hover. Glyph color cues which orb you're about to launch even before
- * the magnify/click. */
+/* Climate-hacker palette. One cohesive register across the whole tool ring:
+ * green (life), amber (intelligence-per-watt), ochre (scholarly), sage
+ * (calm), sky (system), rust (cloud mind), cream (paper). No third-party
+ * brand colors — every orb wears Scatter grammar. The user sees ONE OS,
+ * not eight vendors lined up. */
 
-.scatter-orb-firefox {
-    border-color: rgba(255, 145, 50, 0.30);
+/* Scatter Browser — Scatter green. The browser IS Scatter. */
+.scatter-orb-scatter-browser {
+    border-color: rgba(74, 222, 128, 0.30);
 }
-.scatter-orb-firefox:hover {
-    border-color: rgba(255, 145, 50, 0.75);
+.scatter-orb-scatter-browser:hover {
+    border-color: rgba(74, 222, 128, 0.85);
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55),
-                0 0 0 2px rgba(255, 145, 50, 0.45);
+                0 0 0 2px rgba(74, 222, 128, 0.45);
 }
-.scatter-orb-firefox .scatter-reveal-glyph { color: #ff9132; }
+.scatter-orb-scatter-browser .scatter-reveal-glyph { color: #4ade80; }
 
+/* AppFlowy — sage. Notes are quiet. */
+.scatter-orb-appflowy {
+    border-color: rgba(122, 158, 126, 0.30);
+}
+.scatter-orb-appflowy:hover {
+    border-color: rgba(122, 158, 126, 0.85);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55),
+                0 0 0 2px rgba(122, 158, 126, 0.45);
+}
+.scatter-orb-appflowy .scatter-reveal-glyph { color: #7a9e7e; }
+
+/* OnlyOffice — paper cream. The page is the icon. */
+.scatter-orb-onlyoffice {
+    border-color: rgba(245, 242, 234, 0.25);
+}
+.scatter-orb-onlyoffice:hover {
+    border-color: rgba(245, 242, 234, 0.80);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55),
+                0 0 0 2px rgba(245, 242, 234, 0.40);
+}
+.scatter-orb-onlyoffice .scatter-reveal-glyph { color: #f5f2ea; }
+
+/* Zotero — ochre. Scholarly leather + parchment. */
+.scatter-orb-zotero {
+    border-color: rgba(200, 148, 26, 0.30);
+}
+.scatter-orb-zotero:hover {
+    border-color: rgba(200, 148, 26, 0.85);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55),
+                0 0 0 2px rgba(200, 148, 26, 0.45);
+}
+.scatter-orb-zotero .scatter-reveal-glyph { color: #c8941a; }
+
+/* Files — sky. System surface. */
+.scatter-orb-files {
+    border-color: rgba(106, 140, 170, 0.30);
+}
+.scatter-orb-files:hover {
+    border-color: rgba(106, 140, 170, 0.85);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55),
+                0 0 0 2px rgba(106, 140, 170, 0.45);
+}
+.scatter-orb-files .scatter-reveal-glyph { color: #6a8caa; }
+
+/* Scatter Code — amber. The intelligence-per-watt color. */
 .scatter-orb-scatter-code {
     border-color: rgba(255, 184, 0, 0.30);
 }
@@ -164,33 +215,25 @@
 }
 .scatter-orb-scatter-code .scatter-reveal-glyph { color: #ffb800; }
 
+/* Claude Code — rust. The cloud mind, autumn-warm but earthy. */
 .scatter-orb-claude-code {
-    border-color: rgba(217, 154, 90, 0.30);
+    border-color: rgba(184, 89, 63, 0.30);
 }
 .scatter-orb-claude-code:hover {
-    border-color: rgba(217, 154, 90, 0.80);
+    border-color: rgba(184, 89, 63, 0.85);
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55),
-                0 0 0 2px rgba(217, 154, 90, 0.45);
+                0 0 0 2px rgba(184, 89, 63, 0.45);
 }
-.scatter-orb-claude-code .scatter-reveal-glyph { color: #d99a5a; }
+.scatter-orb-claude-code .scatter-reveal-glyph { color: #b8593f; }
 
-.scatter-orb-files {
-    border-color: rgba(140, 170, 200, 0.30);
-}
-.scatter-orb-files:hover {
-    border-color: rgba(140, 170, 200, 0.75);
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55),
-                0 0 0 2px rgba(140, 170, 200, 0.40);
-}
-.scatter-orb-files .scatter-reveal-glyph { color: #8caac8; }
-
+/* Terminal — green. System verb, brand twin to Scatter Browser. */
 .scatter-orb-terminal {
     border-color: rgba(74, 222, 128, 0.30);
 }
 .scatter-orb-terminal:hover {
-    border-color: rgba(74, 222, 128, 0.75);
+    border-color: rgba(74, 222, 128, 0.85);
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55),
-                0 0 0 2px rgba(74, 222, 128, 0.40);
+                0 0 0 2px rgba(74, 222, 128, 0.45);
 }
 .scatter-orb-terminal .scatter-reveal-glyph { color: #4ade80; }
 

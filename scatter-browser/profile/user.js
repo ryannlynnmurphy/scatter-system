@@ -121,3 +121,17 @@ user_pref("browser.theme.toolbar-theme", 0);
 
 // ---------- userChrome.css / userContent.css: enabled so Scatter chrome applies ----------
 user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);
+
+// ---------- Scatter branding ----------
+// The omnibox placeholder reads "Search with Scatter or enter address" once
+// the search engine is renamed via policies.json (SearchEngines policy).
+// Phase 2 swaps the underlying engine from DuckDuckGo to a Scatter-Core
+// journal-first endpoint per CORE_SYNTHESIS §3.
+user_pref("browser.urlbar.placeholderName", "Scatter");
+user_pref("browser.urlbar.placeholderName.private", "Scatter");
+
+// Tab bar density — match userChrome.css Chromium-like slim tabs.
+user_pref("browser.uidensity", 1);   // 0 = normal, 1 = compact, 2 = touch
+
+// Disable the alert-bar "Make Firefox/LibreWolf the default browser" nag.
+user_pref("browser.shell.checkDefaultBrowser", false);

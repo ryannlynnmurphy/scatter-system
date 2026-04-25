@@ -1,0 +1,27 @@
+{
+    "policies": {
+        "DontCheckDefaultBrowser": true,
+        "DisableTelemetry": true,
+        "DisablePocket": true,
+        "DisableFirefoxAccounts": true,
+        "DisableFirefoxStudies": true,
+        "OverrideFirstRunPage": "",
+        "OverridePostUpdatePage": "",
+        "PasswordManagerEnabled": false,
+        "SearchEngines": {
+            "PreventInstalls": false,
+            "Default": "Scatter",
+            "Add": [
+                {
+                    "Name": "Scatter",
+                    "Description": "scatter search everywhere",
+                    "Alias": "scatter",
+                    "URLTemplate": "https://duckduckgo.com/?q={searchTerms}&t=scatter",
+                    "SuggestURLTemplate": "https://duckduckgo.com/ac/?q={searchTerms}&type=list",
+                    "IconURL": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxNiAxNiI+PHJlY3Qgd2lkdGg9IjE2IiBoZWlnaHQ9IjE2IiBmaWxsPSIjMGEwYTBhIi8+PHRleHQgeD0iOCIgeT0iMTEiIGZvbnQtZmFtaWx5PSJtb25vc3BhY2UiIGZvbnQtc2l6ZT0iOSIgZm9udC13ZWlnaHQ9IjcwMCIgZmlsbD0iI2Y1ZjJlYSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+Jmd0Oy0mbHQ7PC90ZXh0Pjwvc3ZnPg=="
+                }
+            ],
+            "Remove": ["Google", "Bing", "Amazon.com", "eBay", "Wikipedia (en)"]
+        }
+    }
+}

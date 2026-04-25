@@ -1,56 +1,62 @@
 #!/usr/bin/env bash
-# Scatter Browser launcher — Firefox with the Scatter profile, in the bubble.
+# Scatter Browser launcher.
 #
-# Profile location: ~/.scatter/firefox-profile/
-# First run: copies user.js from the repo into the profile to harden
-# defaults. Subsequent runs inherit that hardening.
+# Prefers LibreWolf as the underlying engine (Firefox-based, hardened
+# upstream — anti-fingerprinting, no telemetry, container tabs); falls
+# back to plain Firefox if LibreWolf isn't installed yet. Either way the
+# Scatter profile, userChrome.css, and policies.json apply on top.
 #
-# Firejail sandbox: loaded from scatter-browser.profile in this directory.
-# If firejail isn't installed, falls back to plain firefox with a clear
-# notice. Install with: sudo apt install firejail
+# Profile: ~/.scatter/scatter-browser-profile/
+# First run: copies user.js + chrome/userChrome.css from this repo.
+# Subsequent runs refresh those files so edits to the repo propagate.
+#
+# Optional firejail sandbox: scatter-browser.profile in this directory.
 set -eu
 
 SCATTER_HOME="${SCATTER_HOME:-$HOME/scatter-system}"
-PROFILE_DIR="$HOME/.scatter/firefox-profile"
-USERJS_SRC="$SCATTER_HOME/scatter-browser/profile/user.js"
+PROFILE_DIR="$HOME/.scatter/scatter-browser-profile"
+SRC_DIR="$SCATTER_HOME/scatter-browser/profile"
+USERJS_SRC="$SRC_DIR/user.js"
+USERCHROME_SRC="$SRC_DIR/userChrome.css"
 FIREJAIL_PROFILE="$SCATTER_HOME/scatter-browser/scatter-browser.profile"
 
-# Learner profile refusal
+# Learner profile refusal — no web for kids in the v0 build.
 PROFILE=$(python3 "$SCATTER_HOME/scatter_core.py" profile 2>/dev/null || echo researcher)
 if [ "$PROFILE" = "learner" ]; then
     echo "Scatter: the learner profile stays local — no web browsing in this build."
     exit 1
 fi
 
-# Create the Scatter Firefox profile if needed.
-if [ ! -d "$PROFILE_DIR" ]; then
-    echo "Scatter: first launch — creating the Scatter Firefox profile..."
-    mkdir -p "$PROFILE_DIR"
+# Pick the engine. LibreWolf wins; Firefox is the fallback so the bar
+# doesn't dead-end while LibreWolf is being installed.
+if command -v librewolf >/dev/null 2>&1; then
+    ENGINE="librewolf"
+elif command -v firefox >/dev/null 2>&1; then
+    ENGINE="firefox"
+    echo "Scatter Browser: LibreWolf not yet installed; running on Firefox."
+    echo "  To install LibreWolf: bash $SCATTER_HOME/scatter-browser/install.sh"
+else
+    echo "Scatter Browser: no Firefox-family engine found."
+    echo "  Install LibreWolf: bash $SCATTER_HOME/scatter-browser/install.sh"
+    exit 1
 fi
 
-# Refresh user.js every launch so edits to the repo propagate. User changes
-# to prefs (via about:config) persist in prefs.js, which Firefox writes on
-# exit — those override user.js where they differ, but only at session
-# start. This keeps scatter-browser.git-repo the source of truth for
-# baseline hardening.
-if [ -f "$USERJS_SRC" ]; then
-    cp "$USERJS_SRC" "$PROFILE_DIR/user.js"
-fi
+# Profile dir + chrome/ subdir for userChrome.css.
+mkdir -p "$PROFILE_DIR/chrome"
+
+# Refresh prefs + chrome on every launch so the repo is source of truth.
+[ -f "$USERJS_SRC" ]      && cp "$USERJS_SRC"      "$PROFILE_DIR/user.js"
+[ -f "$USERCHROME_SRC" ]  && cp "$USERCHROME_SRC"  "$PROFILE_DIR/chrome/userChrome.css"
 
 # Journal the launch.
-python3 "$SCATTER_HOME/scatter_core.py" - <<'PYJOURNAL' 2>/dev/null || true
+python3 "$SCATTER_HOME/scatter_core.py" - <<PYJOURNAL 2>/dev/null || true
 import scatter_core as sc
-sc.journal_append("scatter_browser_launch", profile="researcher")
+sc.journal_append("scatter_browser_launch", engine="$ENGINE")
 PYJOURNAL
 
-# Launch.
+# Launch — firejail if the bubble profile is present, else direct.
 if command -v firejail >/dev/null 2>&1 && [ -f "$FIREJAIL_PROFILE" ]; then
-    exec firejail --profile="$FIREJAIL_PROFILE" firefox --profile "$PROFILE_DIR" --no-remote "$@"
-elif command -v firejail >/dev/null 2>&1; then
-    echo "Scatter Browser: firejail present but Scatter profile missing — using default firejail firefox profile"
-    exec firejail firefox --profile "$PROFILE_DIR" --no-remote "$@"
+    exec firejail --profile="$FIREJAIL_PROFILE" "$ENGINE" --profile "$PROFILE_DIR" --no-remote "$@"
 else
-    echo "Scatter Browser: firejail not installed — running outside the sandbox."
-    echo "  Install with: sudo apt install firejail"
-    exec firefox --profile "$PROFILE_DIR" --no-remote "$@"
+    exec "$ENGINE" --profile "$PROFILE_DIR" --no-remote "$@"
 fi

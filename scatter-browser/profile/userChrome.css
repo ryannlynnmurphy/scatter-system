@@ -1,0 +1,80 @@
+/* Scatter Browser — chrome overrides.
+ *
+ * Layered on top of LibreWolf to produce a Chromium-like UI: slim tabs at
+ * the top, hidden bookmarks bar, single prominent omnibox, hover-only
+ * close buttons, no sidebar fluff. LibreWolf's privacy hardening stays
+ * intact — this file only changes how the browser LOOKS.
+ *
+ * Loaded because user.js sets:
+ *   toolkit.legacyUserProfileCustomizations.stylesheets = true
+ */
+
+/* ── Density + radii: Chromium register, not Photon ──────────────────── */
+:root {
+    --tab-min-height: 32px !important;
+    --tab-block-margin: 4px !important;
+    --toolbarbutton-border-radius: 6px !important;
+    --tab-border-radius: 8px !important;
+    --urlbar-height: 32px !important;
+    --toolbarbutton-inner-padding: 6px !important;
+}
+
+/* ── Tabs: slim, square-ish, Chromium-style ──────────────────────────── */
+.tabbrowser-tab {
+    min-height: var(--tab-min-height) !important;
+    height: var(--tab-min-height) !important;
+}
+.tab-content {
+    padding-inline: 10px !important;
+}
+.tab-background {
+    border-radius: var(--tab-border-radius) !important;
+    margin-block: var(--tab-block-margin) !important;
+}
+
+/* Close button: hidden until hover, like Chromium */
+.tab-close-button {
+    opacity: 0 !important;
+    transition: opacity 140ms ease;
+}
+.tabbrowser-tab:hover .tab-close-button,
+.tabbrowser-tab[selected="true"] .tab-close-button {
+    opacity: 1 !important;
+}
+
+/* ── URL bar: prominent, slim, single-line ───────────────────────────── */
+#urlbar-container {
+    min-height: var(--urlbar-height) !important;
+}
+#urlbar {
+    min-height: var(--urlbar-height) !important;
+    border-radius: 6px !important;
+}
+#urlbar-background {
+    border-radius: 6px !important;
+}
+
+/* ── Hide noise: bookmarks bar, sidebar button, library, FxA, pocket ── */
+#PersonalToolbar {
+    visibility: collapse !important;
+}
+#sidebar-button,
+#library-button,
+#fxa-toolbar-menu-button,
+#save-to-pocket-button {
+    display: none !important;
+}
+
+/* ── Toolbar buttons: rounded, Chromium-shaped ───────────────────────── */
+toolbarbutton .toolbarbutton-icon {
+    border-radius: var(--toolbarbutton-border-radius) !important;
+}
+
+/* ── Window controls stay native (matches scatter-bar register) ──────── */
+
+/* ── Default new tab + browser bg: Scatter paper-black, not white ────── */
+:root:not([privatebrowsingmode]) {
+    --toolbar-bgcolor: #0a0a0a !important;
+    --toolbar-color: #f5f2ea !important;
+    --tab-selected-bgcolor: #16161e !important;
+}
