@@ -227,6 +227,43 @@ def _watts_estimate(model_name, duration_s):
     return watts * max(duration_s, 0.0)
 
 
+_GALLERY_MOD = None
+
+
+def _gallery():
+    """Lazy-load scatter/gallery.py with the same package/standalone fallback
+    used elsewhere in this module. Memoized so we pay the importlib dance once."""
+    global _GALLERY_MOD
+    if _GALLERY_MOD is not None:
+        return _GALLERY_MOD
+    try:
+        from . import gallery as g  # type: ignore
+    except Exception:
+        import importlib.util as _iu
+        _p = os.path.join(os.path.dirname(__file__), "gallery.py")
+        _spec = _iu.spec_from_file_location("scatter_gallery", _p)
+        g = _iu.module_from_spec(_spec)
+        _spec.loader.exec_module(g)
+    _GALLERY_MOD = g
+    return g
+
+
+def _save_to_gallery(subtype, prompt, html, session_id):
+    """Best-effort gallery save. Never fails the request — a disk-full or
+    permissions hiccup must not turn a good build into an error response.
+    Failures are journaled so they can be noticed without bubbling up."""
+    try:
+        return _gallery().save(subtype, prompt, html, MODEL, session=session_id)
+    except Exception as e:
+        sc.journal_append(
+            "gallery_save_failed",
+            session=session_id,
+            subtype=subtype,
+            error=str(e),
+        )
+        return None
+
+
 def _humanize_ollama_error(exc, model_name):
     """Map urllib exceptions from Ollama into a plain-English RuntimeError.
 
@@ -544,6 +581,36 @@ class StudioHandler(http.server.BaseHTTPRequestHandler):
                     self.send_json(json.loads(resp.read()))
             except Exception as e:
                 self.send_json({"status": "error", "error": str(e)})
+        elif self.path.startswith("/api/artifacts"):
+            # List gallery entries newest-first. Tombstones filtered by gallery.
+            _, limit = self._parse_query(["_", "limit"])
+            try:
+                limit_i = int(limit) if limit else 100
+            except ValueError:
+                limit_i = 100
+            entries = _gallery().listing(limit=limit_i)
+            self.send_json({"entries": entries, "count": len(entries)})
+        elif self.path.startswith("/artifact/"):
+            # Render a single artifact as HTML. The id format is enforced by
+            # gallery._artifact_dir; anything non-matching returns 404, which
+            # also handles path traversal attempts (../, absolute paths, etc).
+            artifact_id = self.path[len("/artifact/"):].split("?", 1)[0].split("/", 1)[0]
+            result = _gallery().read(artifact_id)
+            if result is None:
+                self.send_response(404)
+                self.end_headers()
+                return
+            _, html = result
+            body = html.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Content-Security-Policy",
+                             "default-src 'self' 'unsafe-inline' data:; "
+                             "script-src 'unsafe-inline'; "
+                             "connect-src 'none'")
+            self.end_headers()
+            self.wfile.write(body)
         elif self.path.startswith("/api/watts"):
             self.send_json({
                 "total_joules": sc.watts_total(),
@@ -710,10 +777,12 @@ class StudioHandler(http.server.BaseHTTPRequestHandler):
                     self.send_json({"error": str(e), "status": "error"})
                     return
                 session["current_html"] = html
+                artifact_id = _save_to_gallery(subtype, user_message, html, session_id)
                 session["history"].append({
                     "timestamp": datetime.datetime.now().isoformat(),
                     "prompt": user_message,
                     "subtype": subtype,
+                    "artifact_id": artifact_id,
                 })
                 sc.journal_append(
                     "build",
@@ -721,9 +790,12 @@ class StudioHandler(http.server.BaseHTTPRequestHandler):
                     prompt=user_message,
                     subtype=subtype,
                     html_bytes=len(html),
+                    artifact_id=artifact_id,
                 )
                 self.send_json({"mode": "build", "html": html,
-                                "subtype": subtype, "status": "ok"})
+                                "subtype": subtype,
+                                "artifact_id": artifact_id,
+                                "status": "ok"})
                 return
 
             # Legacy freeform path (kept for clients that pass subtype="freeform").
@@ -739,13 +811,16 @@ class StudioHandler(http.server.BaseHTTPRequestHandler):
                 html = extract_html(response)
                 session["messages"].append({"role": "assistant", "content": response})
                 session["current_html"] = html
+                artifact_id = _save_to_gallery("freeform", user_message, html, session_id)
                 session["history"].append({
                     "timestamp": datetime.datetime.now().isoformat(),
                     "prompt": user_message,
+                    "artifact_id": artifact_id,
                 })
                 sc.journal_append("build", session=session_id, prompt=user_message,
-                                  html_bytes=len(html))
-                self.send_json({"mode": "build", "html": html, "status": "ok"})
+                                  html_bytes=len(html), artifact_id=artifact_id)
+                self.send_json({"mode": "build", "html": html,
+                                "artifact_id": artifact_id, "status": "ok"})
             except Exception as e:
                 sc.journal_append("build_error", session=session_id,
                                   prompt=user_message, error=str(e))
@@ -1469,6 +1544,182 @@ body {
     font-size: 0;
 }
 
+/* ── Gallery ──
+   Artifacts, per memory "Artifacts Are The Whole Thing": the persistent
+   surface Scatter keeps. Register is magazine-masthead, not list-widget:
+   one entry per row, kicker · title · summary · quiet trailing time. */
+.gallery {
+    padding: 36px 44px 60px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+.gallery-masthead {
+    font-family: "Inter", "Helvetica Neue", sans-serif;
+    color: #d8dce2;
+    letter-spacing: -0.015em;
+    padding-bottom: 22px;
+    border-bottom: 1px solid #1a1a1a;
+    margin-bottom: 6px;
+}
+.gallery-masthead h1 {
+    font-size: 1.35rem;
+    font-weight: 600;
+    margin: 0 0 4px;
+}
+.gallery-masthead p {
+    font-size: 0.78rem;
+    color: #5a5a6e;
+    margin: 0;
+}
+.artifact-card {
+    position: relative;
+    padding: 20px 4px 22px;
+    border-bottom: 1px solid #141414;
+    cursor: pointer;
+    transition: padding-left 140ms ease;
+}
+.artifact-card:hover { padding-left: 10px; }
+.artifact-card:last-child { border-bottom: none; }
+.artifact-kicker {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #00ff88;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.artifact-kicker .dot {
+    width: 3px; height: 3px; border-radius: 50%;
+    background: currentColor; opacity: 0.6;
+}
+.artifact-kicker .date { color: #5a5a6e; letter-spacing: 0.1em; }
+.artifact-kicker.lesson { color: #ffb800; }
+.artifact-kicker.reference { color: #6ac4ff; }
+.artifact-kicker.freeform { color: #c8c8d0; }
+.artifact-title {
+    font-family: "Inter", "Helvetica Neue", sans-serif;
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: -0.012em;
+    color: #e8ecf0;
+    margin: 0 0 6px;
+    line-height: 1.35;
+}
+.artifact-summary {
+    font-family: "Inter", "Helvetica Neue", sans-serif;
+    font-size: 0.84rem;
+    line-height: 1.55;
+    color: #8a8a98;
+    margin: 0;
+    max-width: 640px;
+}
+.artifact-card .btn-forget {
+    position: absolute;
+    top: 18px;
+    right: 0;
+    opacity: 0;
+    transition: opacity 140ms ease;
+}
+.artifact-card:hover .btn-forget { opacity: 1; }
+
+.gallery-empty {
+    margin: 48px auto;
+    max-width: 420px;
+    text-align: center;
+    font-family: "Inter", "Helvetica Neue", sans-serif;
+    color: #5a5a6e;
+}
+.gallery-empty .glyph {
+    font-family: "JetBrains Mono", monospace;
+    color: #00ff88;
+    font-size: 0.78rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    margin-bottom: 14px;
+}
+.gallery-empty h2 {
+    font-weight: 600;
+    font-size: 1.3rem;
+    letter-spacing: -0.015em;
+    color: #c8c8d0;
+    margin: 0 0 8px;
+}
+.gallery-empty p { font-size: 0.82rem; line-height: 1.55; margin: 0; }
+
+/* Single-artifact viewer: iframe fills the canvas; a slim header holds
+   the back affordance and the forget action. */
+.viewer-head {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 24px;
+    border-bottom: 1px solid #1a1a1a;
+    background: var(--scatter-bg-1);
+    font-family: "Inter", "Helvetica Neue", sans-serif;
+}
+.viewer-back {
+    background: transparent;
+    border: none;
+    color: #8a8a98;
+    font: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+    padding: 4px 8px 4px 0;
+    letter-spacing: -0.005em;
+    transition: color 140ms ease;
+}
+.viewer-back:hover { color: #00ff88; }
+.viewer-title {
+    flex: 1;
+    color: #e8ecf0;
+    font-size: 0.88rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.viewer-meta {
+    color: #5a5a6e;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+.viewer-frame {
+    flex: 1;
+    width: 100%;
+    border: 0;
+    background: #0a0a0a;
+    display: block;
+}
+
+/* Rail subnav — quiet ink, underline the active route. */
+.rail-nav {
+    display: flex;
+    gap: 14px;
+    padding: 4px 20px 20px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+}
+.nav-link {
+    background: transparent;
+    border: none;
+    color: #5a5a6e;
+    font: inherit;
+    text-transform: lowercase;
+    padding: 0;
+    cursor: pointer;
+    transition: color 140ms ease;
+}
+.nav-link:hover { color: #c8c8d0; }
+.nav-link.active { color: #00ff88; }
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -1485,10 +1736,24 @@ body {
             <span class="mode-label" id="mode-label"></span>
         </button>
     </header>
+    <nav class="rail-nav">
+        <button class="nav-link active" id="nav-gallery" onclick="showView('gallery')">artifacts</button>
+        <button class="nav-link" id="nav-journal" onclick="showView('journal')">chats</button>
+    </nav>
 </aside>
 
 <main class="canvas">
-    <div class="view active" id="view-journal"><div class="entry-list" id="journal-list"></div></div>
+    <div class="view active" id="view-gallery"><div class="gallery" id="gallery-list"></div></div>
+    <div class="view" id="view-artifact">
+        <div class="viewer-head">
+            <button class="viewer-back" onclick="closeArtifact()">← artifacts</button>
+            <div class="viewer-title" id="viewer-title"></div>
+            <span class="viewer-meta" id="viewer-meta"></span>
+            <button class="btn-forget" title="forget this artifact" onclick="forgetCurrentArtifact()">×</button>
+        </div>
+        <iframe class="viewer-frame" id="viewer-frame" sandbox="allow-scripts" src="about:blank"></iframe>
+    </div>
+    <div class="view" id="view-journal"><div class="entry-list" id="journal-list"></div></div>
     <div class="view" id="view-audit"><div class="entry-list" id="audit-list"></div></div>
 </main>
 
@@ -1675,8 +1940,164 @@ async function toggleTheme() {
 // Watts/theme ticker retired from the rail. Data still available at
 // /api/watts for anyone who wants it.
 
-// Inspector opens on the journal — the prompt lives in the bar.
-loadJournal();
+// ---------- view switching ----------
+// Simple route-like switch between the two surfaces users reach for:
+// gallery (the default — artifacts Scatter has kept) and chats (secondary).
+// Audit lives in the DOM but isn't in the subnav; it's still addressable via
+// showView('audit') for power users and debugging.
+let currentArtifactId = null;
+
+function showView(name) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
+    const view = document.getElementById('view-' + name);
+    if (view) view.classList.add('active');
+    const nav = document.getElementById('nav-' + name);
+    if (nav) nav.classList.add('active');
+    if (name === 'gallery') loadGallery();
+    if (name === 'journal') loadJournal();
+    if (name === 'audit') loadAudit();
+}
+
+// ---------- gallery ----------
+// Editorial cards, not a grid. Each row is a table-of-contents entry:
+// kicker · title · one-line summary. Click opens the rendered artifact
+// in an iframe; the back button returns here.
+
+const GALLERY_EMPTY_HTML = `
+    <div class="gallery-empty">
+      <div class="glyph">artifacts</div>
+      <h2>nothing kept yet</h2>
+      <p>anything you build shows up here.<br>say what you want to make.</p>
+    </div>`;
+
+function fmtCardDate(iso) {
+    try {
+        const d = new Date(iso);
+        const day = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        const h = String(d.getHours()).padStart(2, '0');
+        const m = String(d.getMinutes()).padStart(2, '0');
+        return day + ' · ' + h + ':' + m;
+    } catch (e) { return iso || ''; }
+}
+
+function renderArtifactCard(meta) {
+    const id = escapeHTML(meta.id);
+    const subtype = escapeHTML(meta.subtype || 'artifact');
+    const title = escapeHTML(meta.title || 'untitled');
+    const summary = escapeHTML(meta.summary || '');
+    const date = escapeHTML(fmtCardDate(meta.ts));
+    // Inline onclick carries the id through without data-attribute ceremony.
+    // stopPropagation on forget so clicking × doesn't open the card.
+    return `
+      <article class="artifact-card" onclick="openArtifact('${id}')">
+        <div class="artifact-kicker ${subtype}">
+          <span>${subtype}</span>
+          <span class="dot"></span>
+          <span class="date">${date}</span>
+        </div>
+        <h2 class="artifact-title">${title}</h2>
+        ${summary ? `<p class="artifact-summary">${summary}</p>` : ''}
+        <button class="btn-forget" title="forget this artifact"
+                onclick="event.stopPropagation(); forgetArtifact('${id}')">×</button>
+      </article>`;
+}
+
+async function loadGallery() {
+    const container = document.getElementById('gallery-list');
+    container.innerHTML = `
+        <div class="gallery-masthead">
+          <h1>Artifacts</h1>
+          <p>everything Scatter has made with you, kept on this machine.</p>
+        </div>
+        <div class="empty-note">loading…</div>`;
+    try {
+        const resp = await fetch('/api/artifacts?limit=100');
+        const data = await resp.json();
+        const entries = data.entries || [];
+        if (entries.length === 0) {
+            container.innerHTML = `
+                <div class="gallery-masthead">
+                  <h1>Artifacts</h1>
+                  <p>everything Scatter has made with you, kept on this machine.</p>
+                </div>`
+                + GALLERY_EMPTY_HTML;
+            return;
+        }
+        const head = `
+            <div class="gallery-masthead">
+              <h1>Artifacts</h1>
+              <p>${entries.length} kept on this machine.</p>
+            </div>`;
+        container.innerHTML = head + entries.map(renderArtifactCard).join('');
+    } catch (e) {
+        container.innerHTML = `
+            <div class="gallery-masthead"><h1>Artifacts</h1></div>
+            <div class="empty-note">could not load artifacts.</div>`;
+    }
+}
+
+function openArtifact(id) {
+    // Guard against a forged id leaking into the iframe URL. Only accept the
+    // exact art_<12 hex> shape gallery produces; anything else silently drops.
+    if (!/^art_[a-f0-9]{12}$/.test(id)) return;
+    currentArtifactId = id;
+    const frame = document.getElementById('viewer-frame');
+    const title = document.getElementById('viewer-title');
+    const meta = document.getElementById('viewer-meta');
+    title.textContent = 'loading…';
+    meta.textContent = '';
+    frame.src = '/artifact/' + id;
+    // Pull meta for the header. The iframe already has the body; this is only
+    // for the chrome so the user knows what they're looking at.
+    fetch('/api/artifacts?limit=500').then(r => r.json()).then(data => {
+        const m = (data.entries || []).find(e => e.id === id);
+        if (m) {
+            title.textContent = m.title || 'untitled';
+            meta.textContent = m.subtype || '';
+        }
+    }).catch(() => {});
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-artifact').classList.add('active');
+}
+
+function closeArtifact() {
+    currentArtifactId = null;
+    document.getElementById('viewer-frame').src = 'about:blank';
+    showView('gallery');
+}
+
+async function forgetArtifact(id) {
+    if (!confirm('Forget this artifact? A tombstone is appended; the file stays on disk until the next cleanup pass.')) return;
+    try {
+        const resp = await fetch('/api/forget', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ target_id: id, reason: 'user_click' })
+        });
+        const data = await resp.json();
+        if (data.status === 'ok') {
+            await loadGallery();
+        } else {
+            alert('could not forget: ' + (data.error || 'unknown'));
+        }
+    } catch (e) {
+        alert('could not forget: ' + e.message);
+    }
+}
+
+function forgetCurrentArtifact() {
+    if (!currentArtifactId) return;
+    const id = currentArtifactId;
+    forgetArtifact(id).then(() => {
+        if (!document.getElementById('view-gallery').classList.contains('active')) {
+            closeArtifact();
+        }
+    });
+}
+
+// Inspector opens on the gallery — artifacts are the thesis.
+loadGallery();
 </script>
 </body></html>"""
 
