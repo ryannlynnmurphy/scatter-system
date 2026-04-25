@@ -16,23 +16,17 @@
 }
 
 /* The bowtie — Scatter's face. The left gutter of the bar carries it
- * with a soft green ambient light. It is reactive (clicking summons the
- * apps reveal) but it is not a button in the chrome sense — it has no
- * pill, no border, no hover background. The press is felt in motion. */
+ * with a soft green ambient light. Two-row stack inside one click target:
+ * pixel-art mascot on top, `>-<` bowtie text below. The mascot wears the
+ * bowtie. Reactive but not chromed — no pill, no border, no hover background.
+ * The press is felt in motion. */
 .scatter-bar-glyph {
-    font-family: 'JetBrains Mono', 'Victor Mono', monospace;
-    font-size: 28px;
-    font-weight: 500;
-    color: #d8d8d8;
-    letter-spacing: 0.06em;
-    min-width: 64px;
+    min-width: 72px;
     background-color: transparent;
     background-gradient-direction: none;
     border: none;
     border-radius: 0;
     padding: 0;
-    text-shadow: 0 0 10px rgba(74, 222, 128, 0.45),
-                 0 0 22px rgba(74, 222, 128, 0.20);
 }
 .scatter-bar-glyph:hover,
 .scatter-bar-glyph:focus,
@@ -40,6 +34,28 @@
     background-color: transparent;
     border: none;
     box-shadow: none;
+}
+.scatter-bar-glyph-stack {
+    spacing: 2px;
+}
+.scatter-bar-mascot {
+    icon-size: 26px;
+    color: #f5f2ea;
+}
+.scatter-bar-bowtie {
+    font-family: 'JetBrains Mono', 'Victor Mono', monospace;
+    font-size: 22px;
+    font-weight: 500;
+    color: #d8d8d8;
+    letter-spacing: 0.06em;
+    text-shadow: 0 0 10px rgba(74, 222, 128, 0.45),
+                 0 0 22px rgba(74, 222, 128, 0.20);
+    font-feature-settings: "liga" 0, "calt" 0, "dlig" 0, "clig" 0;
+    font-variant-ligatures: none;
+}
+.scatter-bar-glyph:hover .scatter-bar-bowtie,
+.scatter-bar-glyph:focus .scatter-bar-bowtie,
+.scatter-bar-glyph:active .scatter-bar-bowtie {
     color: #f5f2ea;
 }
 
@@ -72,54 +88,111 @@
     font-weight: 400;
 }
 
-/* ── Reveal: cascade of apps above the bar ─────────────────────────────── */
+/* ── Reveal: column of orbs rising out of the bowtie ──────────────────── */
 
-/* Reveal layer — transparent container; tiles animate in individually. */
+/* Transparent container; orbs animate in individually. */
 .scatter-reveal {
     background-color: transparent;
     border: none;
-    padding: 0 24px;
-    spacing: 16px;
+    padding: 16px;
+    spacing: 18px;
 }
 
+/* Each orb is a circle. Width / height match the JS sizing constant
+ * (96px diameter). Background is near-black with a per-app brand ring;
+ * the icon or glyph sits centered. No labels — the orbs are pure. */
 .scatter-reveal-item {
-    background-color: rgba(15, 15, 15, 0.82);
+    background-color: rgba(12, 12, 12, 0.94);
     background-gradient-direction: none;
-    border: 1px solid rgba(255, 255, 255, 0.04);
-    border-radius: 8px;
-    padding: 16px 22px;
-    min-width: 140px;
-    min-height: 100px;
-    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 999px;
+    width: 96px;
+    height: 96px;
+    min-width: 96px;
+    min-height: 96px;
+    padding: 0;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
 }
 .scatter-reveal-item:hover {
-    background-color: rgba(20, 20, 20, 0.92);
-    border-color: rgba(255, 184, 0, 0.3);
+    background-color: rgba(18, 18, 18, 1.0);
+    border-color: rgba(255, 184, 0, 0.45);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55),
+                0 0 0 2px rgba(255, 184, 0, 0.35);
 }
-.scatter-reveal-item:hover .scatter-reveal-glyph {
-    color: #ffb800;
-}
-.scatter-reveal-item:hover .scatter-reveal-label {
-    color: #f5f2ea;
+
+.scatter-orb-inner {
+    width: 96px;
+    height: 96px;
 }
 
 .scatter-reveal-glyph {
     font-family: 'JetBrains Mono', monospace;
-    font-size: 36px;
+    font-size: 32px;
     font-weight: 500;
     color: #d8d8d8;
     text-align: center;
-    padding-bottom: 12px;
+    padding: 0;
 }
-.scatter-reveal-label {
-    font-family: 'Inter', sans-serif;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.22em;
-    color: #9a9a9a;
-    text-align: center;
-    text-transform: lowercase;
+
+.scatter-orb-icon {
+    icon-size: 48px;
+    color: #f5f2ea;
 }
+
+/* ── Per-app brand tints — orb ring + glyph color ─────────────────────── */
+/* Each app gets a recognizable hue. Ring is subtle at rest, lights up on
+ * hover. Glyph color cues which orb you're about to launch even before
+ * the magnify/click. */
+
+.scatter-orb-firefox {
+    border-color: rgba(255, 145, 50, 0.30);
+}
+.scatter-orb-firefox:hover {
+    border-color: rgba(255, 145, 50, 0.75);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55),
+                0 0 0 2px rgba(255, 145, 50, 0.45);
+}
+.scatter-orb-firefox .scatter-reveal-glyph { color: #ff9132; }
+
+.scatter-orb-scatter-code {
+    border-color: rgba(255, 184, 0, 0.30);
+}
+.scatter-orb-scatter-code:hover {
+    border-color: rgba(255, 184, 0, 0.85);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55),
+                0 0 0 2px rgba(255, 184, 0, 0.50);
+}
+.scatter-orb-scatter-code .scatter-reveal-glyph { color: #ffb800; }
+
+.scatter-orb-claude-code {
+    border-color: rgba(217, 154, 90, 0.30);
+}
+.scatter-orb-claude-code:hover {
+    border-color: rgba(217, 154, 90, 0.80);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55),
+                0 0 0 2px rgba(217, 154, 90, 0.45);
+}
+.scatter-orb-claude-code .scatter-reveal-glyph { color: #d99a5a; }
+
+.scatter-orb-files {
+    border-color: rgba(140, 170, 200, 0.30);
+}
+.scatter-orb-files:hover {
+    border-color: rgba(140, 170, 200, 0.75);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55),
+                0 0 0 2px rgba(140, 170, 200, 0.40);
+}
+.scatter-orb-files .scatter-reveal-glyph { color: #8caac8; }
+
+.scatter-orb-terminal {
+    border-color: rgba(74, 222, 128, 0.30);
+}
+.scatter-orb-terminal:hover {
+    border-color: rgba(74, 222, 128, 0.75);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55),
+                0 0 0 2px rgba(74, 222, 128, 0.40);
+}
+.scatter-orb-terminal .scatter-reveal-glyph { color: #4ade80; }
 
 /* Firefox leap — satellite ember and impact shockwave. */
 .scatter-ember {

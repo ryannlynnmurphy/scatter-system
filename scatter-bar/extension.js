@@ -34,13 +34,22 @@ const MOTION_OUT_MS = 180;
 const MOTION_RISE_PX = 16;
 
 // Apps list — peek-reveal. Keep the set tight; the primary verb is the prompt.
+// Scatter herself is not in this list — the bowtie IS the face. Putting `>-<`
+// in the reveal would duplicate her, and the duplicate would compete with
+// the real one for "which is Scatter."
+//
+// Each tile is an orb (circle), branded per-app. `desktop_id` resolves a real
+// system icon when available; `glyph` is the fallback for in-house apps that
+// don't have a .desktop file. `brand` keys into per-app CSS tint.
+//
+// Order: tiles render bottom-up (column rises out of the bowtie), so the
+// first entry sits closest to the face.
 const APPS = [
-    { label: 'Scatter',      exec: 'xdg-open http://127.0.0.1:8787',               glyph: '>-<' },
-    { label: 'Scatter Code', exec: 'gnome-terminal -- bash -lc "cd ~/scatter-system && exec bash"', glyph: '</>' },
-    { label: 'Claude Code',  exec: 'gnome-terminal -- bash -lc "claude || bash"',  glyph: '[c]' },
-    { label: 'Files',        exec: 'nautilus',                                      glyph: '[ ]' },
-    { label: 'Firefox',      exec: 'firefox',                                       glyph: ' @ ' },
-    { label: 'Terminal',     exec: 'gnome-terminal',                                glyph: ' _ ' },
+    { label: 'Scatter Code', exec: 'gnome-terminal -- bash -lc "cd ~/scatter-system && exec bash"', glyph: '</>', brand: 'scatter-code' },
+    { label: 'Claude Code',  exec: 'gnome-terminal -- bash -lc "claude || bash"',                   glyph: '[c]', brand: 'claude-code' },
+    { label: 'Files',        exec: 'nautilus',  desktop_id: 'org.gnome.Nautilus.desktop',           glyph: '[ ]', brand: 'files' },
+    { label: 'Firefox',      exec: 'firefox',   desktop_id: 'firefox.desktop',                      glyph: ' @ ', brand: 'firefox' },
+    { label: 'Terminal',     exec: 'gnome-terminal', desktop_id: 'org.gnome.Terminal.desktop',      glyph: ' _ ', brand: 'terminal' },
 ];
 
 // Action-modality rules. Client-side first pass — zero-latency and doesn't
@@ -124,13 +133,37 @@ export default class ScatterBarExtension extends Extension {
         // The bowtie. Scatter's face — and the apps trigger. Clicking it
         // summons the reveal layer; clicking again dismisses it. Hover and
         // press are felt in motion, not color.
+        //
+        // Composition: the pixel-art mascot rides ON TOP of the `>-<`
+        // bowtie text. Read as one figure — Scatter wearing her bow tie.
+        // ZWNJs around the dash defeat JBM/Victor Mono ligatures; the
+        // stylesheet also kills liga/calt/dlig on .scatter-bar-bowtie.
+        const glyphStack = new St.BoxLayout({
+            vertical: true,
+            style_class: 'scatter-bar-glyph-stack',
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        const mascotIcon = new St.Icon({
+            gicon: Gio.icon_new_for_string(this.path + '/mascot.png'),
+            icon_size: 26,
+            style_class: 'scatter-bar-mascot',
+        });
+        const bowtieLabel = new St.Label({
+            text: '>‌-‌<',
+            style_class: 'scatter-bar-bowtie',
+            x_align: Clutter.ActorAlign.CENTER,
+        });
+        glyphStack.add_child(mascotIcon);
+        glyphStack.add_child(bowtieLabel);
+
         this._glyph = new St.Button({
-            label: '>-<',
             style_class: 'scatter-bar-glyph',
             y_align: Clutter.ActorAlign.CENTER,
             can_focus: true,
             track_hover: true,
             reactive: true,
+            child: glyphStack,
         });
         this._glyph.set_pivot_point(0.5, 0.5);
         this._glyph.connect('clicked', () => this._toggleReveal());
@@ -171,14 +204,14 @@ export default class ScatterBarExtension extends Extension {
     // ── Reveal layer: apps slide up above the bar, one by one ──────────
 
     _buildRevealLayer() {
-        // Progressive dock: tiles live above the bar in the apps zone,
-        // hidden below the screen edge at rest. As the cursor drags across
-        // the bar from left to right, each tile rises up in turn. Hover
-        // magnifies. Click triggers the per-app signature animation.
+        // Vertical column rising out of the bowtie. Each tile is a circular
+        // orb branded per-app — real system icon when one exists, glyph fallback
+        // for in-house apps. Click triggers that app's signature animation,
+        // which is what carries the "orb morphs into the app" story.
         this._reveal = new St.BoxLayout({
             name: 'scatterReveal',
             style_class: 'scatter-reveal',
-            vertical: false,
+            vertical: true,
             reactive: false,
         });
         this._reveal.visible = true;  // container always present; items animate in
@@ -192,18 +225,50 @@ export default class ScatterBarExtension extends Extension {
                 track_hover: true,
                 reactive: true,
             });
-            const inner = new St.BoxLayout({ vertical: true });
-            const glyph = new St.Label({ text: app.glyph, style_class: 'scatter-reveal-glyph' });
-            const label = new St.Label({ text: app.label, style_class: 'scatter-reveal-label' });
-            inner.add_child(glyph);
-            inner.add_child(label);
+            // Brand tint — one CSS class per app, per stylesheet.
+            if (app.brand) item.add_style_class_name(`scatter-orb-${app.brand}`);
+
+            // Pull the real desktop icon when available; otherwise fall back
+            // to the glyph. The orb is the holder; what's inside is the
+            // app's identity.
+            let iconChild = null;
+            if (app.desktop_id) {
+                try {
+                    const info = Gio.DesktopAppInfo.new(app.desktop_id);
+                    if (info) {
+                        const gicon = info.get_icon();
+                        if (gicon) {
+                            iconChild = new St.Icon({
+                                gicon,
+                                icon_size: 48,
+                                style_class: 'scatter-orb-icon',
+                            });
+                        }
+                    }
+                } catch (_) { /* fall through to glyph */ }
+            }
+            if (!iconChild) {
+                iconChild = new St.Label({
+                    text: app.glyph,
+                    style_class: 'scatter-reveal-glyph',
+                });
+            }
+
+            const inner = new St.Bin({
+                style_class: 'scatter-orb-inner',
+                x_align: Clutter.ActorAlign.CENTER,
+                y_align: Clutter.ActorAlign.CENTER,
+                child: iconChild,
+            });
             item.set_child(inner);
 
-            // Initial state: below its final position, invisible.
+            // Initial state: collapsed at the bowtie's position, invisible.
+            // Animation will rise each orb up the column with a stagger so the
+            // bottom-most (closest to bowtie) emerges first.
             item.set_pivot_point(0.5, 1.0);
-            item.translation_y = 120;
+            item.translation_y = 80;
             item.opacity = 0;
-            item._armed = false;  // has the cursor passed its column yet
+            item._armed = false;
 
             item.connect('clicked', () => {
                 this._launchFromTile(item, app);
@@ -211,9 +276,13 @@ export default class ScatterBarExtension extends Extension {
             item.connect('enter-event', () => this._magnifyTile(item));
             item.connect('leave-event', () => this._settleTile(item));
 
-            this._reveal.add_child(item);
             this._revealItems.push(item);
         });
+
+        // Add to the box in REVERSE so source-order index 0 sits at the bottom
+        // of the column (closest to the bowtie). Stagger by source index then
+        // gives "rises out of the face" — the bottom-most orb emerges first.
+        [...this._revealItems].reverse().forEach(item => this._reveal.add_child(item));
 
         Main.layoutManager.addChrome(this._reveal, {
             affectsInputRegion: true,
@@ -345,7 +414,7 @@ export default class ScatterBarExtension extends Extension {
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, i * 14, () => {
                 item.ease({
                     opacity: 0,
-                    translation_y: 120,
+                    translation_y: 80,
                     scale_x: 1.0,
                     scale_y: 1.0,
                     duration: 260,
@@ -529,14 +598,19 @@ export default class ScatterBarExtension extends Extension {
             this._bar.set_size(monitor.width, BAR_HEIGHT);
         }
         if (this._reveal) {
-            const tileWidth = 140;
-            const tileGap = 16;
-            const revealHeight = 120;
-            const revealWidth = APPS.length * tileWidth + (APPS.length - 1) * tileGap + 48;
-            const rightMargin = 56;
+            // Vertical column anchored above the bowtie — the column rises
+            // out of the face. Bar's left padding is 56px and the bowtie has
+            // min-width 64px, so its center sits at ~88px from monitor.x.
+            const orbSize = 96;       // diameter, must match stylesheet
+            const orbGap = 18;
+            const padding = 16;
+            const revealWidth = orbSize + padding * 2;
+            const revealHeight = APPS.length * orbSize + (APPS.length - 1) * orbGap + padding * 2;
+            const bowtieCenterX = monitor.x + 56 + 32;  // bar padding + half bowtie width
+            const anchorX = Math.max(monitor.x + 8, bowtieCenterX - revealWidth / 2);
             this._reveal.set_size(revealWidth, revealHeight);
             this._reveal.set_position(
-                monitor.x + monitor.width - revealWidth - rightMargin,
+                anchorX,
                 monitor.y + monitor.height - BAR_HEIGHT - revealHeight + 12,
             );
         }
@@ -876,39 +950,99 @@ export default class ScatterBarExtension extends Extension {
         });
     }
 
-    // ── Scatter Code — "compile": brackets crunch together, then snap
-    // open wide as the tile dissolves. The code closing on itself before
-    // the editor opens.
+    // ── Scatter Code — "Pollock": the one Pollock signature in Scatter.
+    // The orb winds up, whips, and a composed splatter of streaks draws
+    // itself outward from the center. Each streak is a thin elongated mark
+    // — a Pollock drip in motion, not a particle blob. Restrained palette
+    // (cream / charcoal / amber / scatter-green); chaotic energy inside a
+    // composed gesture. Pollock × 1, never repeated elsewhere.
     _signatureScatterCode(tile, launch, done) {
         tile.set_pivot_point(0.5, 0.5);
+        const [tileX, tileY] = tile.get_transformed_position();
+        const cx = tileX + tile.width / 2;
+        const cy = tileY + tile.height / 2;
 
-        // Beat 1 — CRUNCH (0-180ms): squeeze horizontally, brackets meet.
+        // The whole drip palette — four colors, as Pollock often used. No
+        // rainbow, no slop. Each streak picks one.
+        const palette = ['#f5f2ea', '#1a1a1a', '#ffb800', '#4ade80'];
+
+        // 14 streaks spread across a ¾-circle below and beside the orb (no
+        // streaks shooting straight up — gravity reads better when the
+        // splatter favors lateral and downward angles).
+        const STREAKS = 14;
+        const streaks = [];
+        for (let i = 0; i < STREAKS; i++) {
+            const angle = -Math.PI * 0.15 + (Math.PI * 1.30) * (i / (STREAKS - 1)) + (Math.random() - 0.5) * 0.18;
+            const length = 56 + Math.random() * 88;
+            const thickness = 2 + Math.floor(Math.random() * 3);
+            const color = palette[i % palette.length];
+            const s = new St.Widget({
+                width: thickness,
+                height: 1,
+                opacity: 0,
+                reactive: false,
+            });
+            s.set_pivot_point(0.5, 0.0);  // grow downward from origin
+            s.rotation_angle_z = (angle * 180 / Math.PI) + 90;  // 0° points down
+            s.set_position(cx - thickness / 2, cy);
+            s.set_style(`background-color: ${color}; border-radius: ${thickness}px; box-shadow: 0 0 6px ${color}55;`);
+            Main.layoutManager.addChrome(s, { affectsInputRegion: false });
+            streaks.push({ actor: s, length });
+        }
+
+        // Beat 1 — WIND-UP (0-120ms): tilt back, pull in. The wrist coils.
         tile.ease({
-            scale_x: 0.55, scale_y: 1.05,
-            duration: 180,
+            scale_x: 0.92, scale_y: 0.92,
+            rotation_angle_z: -8,
+            duration: 120,
             mode: Clutter.AnimationMode.EASE_OUT_QUAD,
         });
 
-        // Beat 2 — SNAP (180-360ms): release outward — the brackets fly apart.
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 180, () => {
+        // Beat 2 — WHIP (120-260ms): snap forward, streaks draw themselves
+        // outward from the orb center. This is the gesture itself.
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 120, () => {
             tile.ease({
-                scale_x: 1.6, scale_y: 0.9,
-                duration: 180,
-                mode: Clutter.AnimationMode.EASE_OUT_BACK,
+                scale_x: 1.18, scale_y: 1.18,
+                rotation_angle_z: 14,
+                duration: 140,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            });
+            streaks.forEach((streakObj, i) => {
+                const { actor, length } = streakObj;
+                // Stagger the strokes slightly — a real wrist-whip lands
+                // marks across a few frames, not in one instant.
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, i * 6, () => {
+                    actor.opacity = 255;
+                    actor.height = length;
+                    actor.ease({
+                        opacity: 0,
+                        duration: 480 + Math.floor(Math.random() * 160),
+                        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                    });
+                    return GLib.SOURCE_REMOVE;
+                });
             });
             launch();
             return GLib.SOURCE_REMOVE;
         });
 
-        // Beat 3 — DISSOLVE (360-640ms): grow + fade.
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 360, () => {
+        // Beat 3 — DISSOLVE (260-560ms): the orb fades into the splatter
+        // it just made. No bounce; Pollock doesn't bounce.
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 260, () => {
             tile.ease({
-                scale_x: 2.0, scale_y: 1.4,
+                scale_x: 1.6, scale_y: 1.6,
                 opacity: 0,
-                duration: 280,
+                rotation_angle_z: 0,
+                duration: 300,
                 mode: Clutter.AnimationMode.EASE_OUT_QUAD,
                 onComplete: () => done(),
             });
+            return GLib.SOURCE_REMOVE;
+        });
+
+        // Cleanup — destroy streaks once they've fully faded.
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 800, () => {
+            streaks.forEach(({ actor }) => { try { actor.destroy(); } catch (_) {} });
             return GLib.SOURCE_REMOVE;
         });
     }
@@ -952,39 +1086,98 @@ export default class ScatterBarExtension extends Extension {
         });
     }
 
-    // ── Files — "unfold": tile compresses then opens horizontally,
-    // like a page spread, before fading. The empty bracket revealing
-    // its contents.
+    // ── Files — "Monet": Water Lilies dissolution. The orb softens, then
+    // breaks into a small set of soft color dabs that drift outward and
+    // upward like reflections on water. Atmospheric, not crisp. Composed,
+    // not random — a fixed lily-pad palette, a slow EASE_OUT_SINE drift,
+    // dabs fading into the canvas as the file manager opens.
     _signatureFiles(tile, launch, done) {
         tile.set_pivot_point(0.5, 0.5);
+        const [tileX, tileY] = tile.get_transformed_position();
+        const cx = tileX + tile.width / 2;
+        const cy = tileY + tile.height / 2;
 
-        // Beat 1 — FOLD (0-160ms): compress to a thin spine.
+        // Lily-pad palette — sage / lavender / blush / periwinkle / cream.
+        // Five colors, each a low-saturation pastel, the way Monet built
+        // light from broken color rather than mixed pigment.
+        const palette = ['#7a9e7e', '#a294b8', '#d4a5a5', '#8da3c7', '#e8d4a5'];
+
+        // 12 dabs, evenly spaced around the orb with slight angular jitter.
+        // Each dab is a soft circle, low opacity, slightly varied size.
+        const DABS = 12;
+        const dabs = [];
+        for (let i = 0; i < DABS; i++) {
+            const baseAngle = (Math.PI * 2) * (i / DABS);
+            const angle = baseAngle + (Math.random() - 0.5) * 0.22;
+            const distance = 90 + Math.random() * 80;
+            const dx = Math.cos(angle) * distance;
+            const dy = Math.sin(angle) * distance - 24;  // slight drift upward
+            const size = 14 + Math.floor(Math.random() * 10);
+            const color = palette[i % palette.length];
+            const d = new St.Widget({
+                width: size,
+                height: size,
+                opacity: 0,
+                reactive: false,
+            });
+            d.set_pivot_point(0.5, 0.5);
+            d.set_position(cx - size / 2, cy - size / 2);
+            d.set_style(
+                `background-color: ${color}; ` +
+                `border-radius: ${size}px; ` +
+                `box-shadow: 0 0 ${Math.floor(size * 0.6)}px ${color}66;`
+            );
+            Main.layoutManager.addChrome(d, { affectsInputRegion: false });
+            dabs.push({ actor: d, dx, dy });
+        }
+
+        // Beat 1 — HUSH (0-180ms): orb breathes, very slight expansion.
+        // Monet doesn't snap — he settles.
         tile.ease({
-            scale_x: 0.32, scale_y: 1.05,
-            duration: 160,
-            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            scale_x: 1.04, scale_y: 1.04,
+            duration: 180,
+            mode: Clutter.AnimationMode.EASE_OUT_SINE,
         });
 
-        // Beat 2 — OPEN (160-440ms): flare wide.
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 160, () => {
-            tile.ease({
-                scale_x: 2.3, scale_y: 1.35,
-                duration: 280,
-                mode: Clutter.AnimationMode.EASE_OUT_BACK,
+        // Beat 2 — EMISSION (180-260ms): dabs fade in at the orb's edge,
+        // then begin their drift. The fade-in masks their spawn — they
+        // appear to bloom from the orb itself.
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 180, () => {
+            dabs.forEach(({ actor, dx, dy }, i) => {
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, i * 8, () => {
+                    actor.opacity = Math.floor(140 + Math.random() * 70);
+                    actor.ease({
+                        translation_x: dx,
+                        translation_y: dy,
+                        scale_x: 1.4,
+                        scale_y: 1.4,
+                        opacity: 0,
+                        duration: 720 + Math.floor(Math.random() * 200),
+                        mode: Clutter.AnimationMode.EASE_OUT_SINE,
+                    });
+                    return GLib.SOURCE_REMOVE;
+                });
             });
             launch();
             return GLib.SOURCE_REMOVE;
         });
 
-        // Beat 3 — DISSOLVE (440-680ms): fade as it settles.
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 440, () => {
+        // Beat 3 — DISSOLVE (260-740ms): orb softens away into the dabs
+        // it just released. Slow expansion, slow fade. No bounce.
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 260, () => {
             tile.ease({
+                scale_x: 1.35, scale_y: 1.35,
                 opacity: 0,
-                scale_x: 2.6, scale_y: 1.45,
-                duration: 240,
-                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                duration: 480,
+                mode: Clutter.AnimationMode.EASE_OUT_SINE,
                 onComplete: () => done(),
             });
+            return GLib.SOURCE_REMOVE;
+        });
+
+        // Cleanup — destroy dabs once they've drifted away.
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1100, () => {
+            dabs.forEach(({ actor }) => { try { actor.destroy(); } catch (_) {} });
             return GLib.SOURCE_REMOVE;
         });
     }

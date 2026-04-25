@@ -20,12 +20,13 @@ rm -f "$DEST/install.sh"
 
 echo "  ✓ installed at $DEST"
 
-# Window controls: close-only × on the right. GNOME's red/yellow/green is
-# off-brand and the bare "no controls" experiment stranded Ryann. One button
-# that closes the window is the accessibility floor.
+# Window controls: minimize, maximize, close — on the right, in that order.
+# Every window gets the full set so users always have a way to step a window
+# out of the way without closing it. Pixel-art glyph theming for these
+# buttons (vs. Adwaita's default dots) is a separate, GTK-theme-level pass.
 if command -v gsettings >/dev/null 2>&1; then
-    gsettings set org.gnome.desktop.wm.preferences button-layout ':close' || true
-    echo "  ✓ window controls: ':close'"
+    gsettings set org.gnome.desktop.wm.preferences button-layout 'appmenu:minimize,maximize,close' || true
+    echo "  ✓ window controls: 'appmenu:minimize,maximize,close'"
 fi
 echo
 echo "  next steps:"
