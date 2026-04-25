@@ -15,9 +15,10 @@
     spacing: 24px;
 }
 
-/* The >-< glyph — Scatter's mouth. Holds the left gutter of the bar,
- * same background as the bar, soft green ambient light. Not a button,
- * not a status pill — a fixed character of the machine. */
+/* The bowtie — Scatter's face. The left gutter of the bar carries it
+ * with a soft green ambient light. It is reactive (clicking summons the
+ * apps reveal) but it is not a button in the chrome sense — it has no
+ * pill, no border, no hover background. The press is felt in motion. */
 .scatter-bar-glyph {
     font-family: 'JetBrains Mono', 'Victor Mono', monospace;
     font-size: 28px;
@@ -25,8 +26,21 @@
     color: #d8d8d8;
     letter-spacing: 0.06em;
     min-width: 64px;
+    background-color: transparent;
+    background-gradient-direction: none;
+    border: none;
+    border-radius: 0;
+    padding: 0;
     text-shadow: 0 0 10px rgba(74, 222, 128, 0.45),
                  0 0 22px rgba(74, 222, 128, 0.20);
+}
+.scatter-bar-glyph:hover,
+.scatter-bar-glyph:focus,
+.scatter-bar-glyph:active {
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    color: #f5f2ea;
 }
 
 /* The entry stretches across the bar. Placeholder is quiet; the caret is

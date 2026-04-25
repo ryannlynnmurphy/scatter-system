@@ -121,10 +121,32 @@ export default class ScatterBarExtension extends Extension {
             track_hover: false,
         });
 
-        this._glyph = new St.Label({
-            text: '>-<',
+        // The bowtie. Scatter's face — and the apps trigger. Clicking it
+        // summons the reveal layer; clicking again dismisses it. Hover and
+        // press are felt in motion, not color.
+        this._glyph = new St.Button({
+            label: '>-<',
             style_class: 'scatter-bar-glyph',
             y_align: Clutter.ActorAlign.CENTER,
+            can_focus: true,
+            track_hover: true,
+            reactive: true,
+        });
+        this._glyph.set_pivot_point(0.5, 0.5);
+        this._glyph.connect('clicked', () => this._toggleReveal());
+        this._glyph.connect('enter-event', () => {
+            this._glyph.ease({
+                scale_x: 1.06, scale_y: 1.06,
+                duration: 140,
+                mode: MOTION_EASE,
+            });
+        });
+        this._glyph.connect('leave-event', () => {
+            this._glyph.ease({
+                scale_x: 1.0, scale_y: 1.0,
+                duration: 160,
+                mode: MOTION_EASE,
+            });
         });
         this._bar.add_child(this._glyph);
 
@@ -272,6 +294,27 @@ export default class ScatterBarExtension extends Extension {
                 return GLib.SOURCE_REMOVE;
             });
         });
+    }
+
+    // Bowtie click — face opens, face closes. The press pulse on the bowtie
+    // gives the click a felt response without needing a color flash.
+    _toggleReveal() {
+        if (this._glyph) {
+            this._glyph.ease({
+                scale_x: 0.92, scale_y: 0.92,
+                duration: 90,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                onComplete: () => {
+                    this._glyph.ease({
+                        scale_x: 1.0, scale_y: 1.0,
+                        duration: 160,
+                        mode: Clutter.AnimationMode.EASE_OUT_BACK,
+                    });
+                },
+            });
+        }
+        if (this._revealShown) this._hideReveal();
+        else this._showReveal();
     }
 
     _scheduleHide() {
@@ -623,8 +666,13 @@ export default class ScatterBarExtension extends Extension {
     // method named _signatureFooBar and wiring it here.
     _signatureFor(appSpec) {
         const label = (appSpec.label || '').toLowerCase();
-        if (label === 'firefox') return (t, launch, done) => this._signatureFirefox(t, launch, done);
-        return (t, launch, done) => this._signatureDefault(t, launch, done);
+        if (label === 'firefox')      return (t, l, d) => this._signatureFirefox(t, l, d);
+        if (label === 'scatter')      return (t, l, d) => this._signatureScatter(t, l, d);
+        if (label === 'scatter code') return (t, l, d) => this._signatureScatterCode(t, l, d);
+        if (label === 'claude code')  return (t, l, d) => this._signatureClaudeCode(t, l, d);
+        if (label === 'files')        return (t, l, d) => this._signatureFiles(t, l, d);
+        if (label === 'terminal')     return (t, l, d) => this._signatureTerminal(t, l, d);
+        return (t, l, d) => this._signatureDefault(t, l, d);
     }
 
     // Generic signature — scale-up + fade. Calls launch at 100ms into the
@@ -773,6 +821,213 @@ export default class ScatterBarExtension extends Extension {
                     try { ring.destroy(); } catch (_) {}
                     done();
                 },
+            });
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    // ── Scatter — "bloom": the bowtie expands as a concentric ring while
+    // the tile dissolves outward. Scatter opening into herself.
+    _signatureScatter(tile, launch, done) {
+        tile.set_pivot_point(0.5, 0.5);
+
+        const [tx, ty] = tile.get_transformed_position();
+        const ring = new St.Widget({
+            style_class: 'scatter-shockwave',
+            width: 28, height: 28,
+            opacity: 0,
+            reactive: false,
+        });
+        ring.set_pivot_point(0.5, 0.5);
+        ring.set_position(tx + tile.width / 2 - 14, ty + tile.height / 2 - 14);
+        Main.layoutManager.addChrome(ring, { affectsInputRegion: false });
+
+        // Beat 1 — INHALE (0-140ms): small pull-in, the face gathering itself.
+        tile.ease({
+            scale_x: 0.92, scale_y: 0.92,
+            duration: 140,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        });
+
+        // Beat 2 — BLOOM (140-460ms): expand fast, ring rides out with it.
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 140, () => {
+            tile.ease({
+                scale_x: 2.2, scale_y: 2.2,
+                opacity: 0,
+                duration: 320,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            });
+            ring.opacity = 230;
+            ring.ease({
+                scale_x: 5.5, scale_y: 5.5,
+                opacity: 0,
+                duration: 520,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            });
+            launch();
+            return GLib.SOURCE_REMOVE;
+        });
+
+        // Beat 3 — RESOLVE (460-620ms): clean up satellite actor, finish.
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 620, () => {
+            try { ring.destroy(); } catch (_) {}
+            done();
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    // ── Scatter Code — "compile": brackets crunch together, then snap
+    // open wide as the tile dissolves. The code closing on itself before
+    // the editor opens.
+    _signatureScatterCode(tile, launch, done) {
+        tile.set_pivot_point(0.5, 0.5);
+
+        // Beat 1 — CRUNCH (0-180ms): squeeze horizontally, brackets meet.
+        tile.ease({
+            scale_x: 0.55, scale_y: 1.05,
+            duration: 180,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        });
+
+        // Beat 2 — SNAP (180-360ms): release outward — the brackets fly apart.
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 180, () => {
+            tile.ease({
+                scale_x: 1.6, scale_y: 0.9,
+                duration: 180,
+                mode: Clutter.AnimationMode.EASE_OUT_BACK,
+            });
+            launch();
+            return GLib.SOURCE_REMOVE;
+        });
+
+        // Beat 3 — DISSOLVE (360-640ms): grow + fade.
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 360, () => {
+            tile.ease({
+                scale_x: 2.0, scale_y: 1.4,
+                opacity: 0,
+                duration: 280,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                onComplete: () => done(),
+            });
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    // ── Claude Code — "cipher": tile rises, rotates a half turn while
+    // expanding, then dissolves upward like steam. The cipher unlocking.
+    _signatureClaudeCode(tile, launch, done) {
+        tile.set_pivot_point(0.5, 0.5);
+
+        // Beat 1 — LIFT (0-160ms): rise + small scale up.
+        tile.ease({
+            translation_y: -10,
+            scale_x: 1.08, scale_y: 1.08,
+            duration: 160,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        });
+
+        // Beat 2 — ROTATE (160-460ms): half-turn while widening.
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 160, () => {
+            tile.ease({
+                rotation_angle_z: 180,
+                scale_x: 1.35, scale_y: 1.35,
+                duration: 300,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            });
+            launch();
+            return GLib.SOURCE_REMOVE;
+        });
+
+        // Beat 3 — STEAM (460-720ms): drift up + fade.
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 460, () => {
+            tile.ease({
+                translation_y: -56,
+                opacity: 0,
+                rotation_angle_z: 360,
+                duration: 260,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                onComplete: () => done(),
+            });
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    // ── Files — "unfold": tile compresses then opens horizontally,
+    // like a page spread, before fading. The empty bracket revealing
+    // its contents.
+    _signatureFiles(tile, launch, done) {
+        tile.set_pivot_point(0.5, 0.5);
+
+        // Beat 1 — FOLD (0-160ms): compress to a thin spine.
+        tile.ease({
+            scale_x: 0.32, scale_y: 1.05,
+            duration: 160,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        });
+
+        // Beat 2 — OPEN (160-440ms): flare wide.
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 160, () => {
+            tile.ease({
+                scale_x: 2.3, scale_y: 1.35,
+                duration: 280,
+                mode: Clutter.AnimationMode.EASE_OUT_BACK,
+            });
+            launch();
+            return GLib.SOURCE_REMOVE;
+        });
+
+        // Beat 3 — DISSOLVE (440-680ms): fade as it settles.
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 440, () => {
+            tile.ease({
+                opacity: 0,
+                scale_x: 2.6, scale_y: 1.45,
+                duration: 240,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                onComplete: () => done(),
+            });
+            return GLib.SOURCE_REMOVE;
+        });
+    }
+
+    // ── Terminal — "prompt extend": underscore stretches across the
+    // tile, blinks once, then dissolves. The cursor declaring itself.
+    _signatureTerminal(tile, launch, done) {
+        tile.set_pivot_point(0.5, 0.5);
+
+        // Beat 1 — STRETCH (0-180ms): horizontal extension, slight drop.
+        tile.ease({
+            scale_x: 1.7, scale_y: 0.85,
+            translation_y: 4,
+            duration: 180,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        });
+
+        // Beat 2 — BLINK (180-360ms): brief opacity dip, then back.
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 180, () => {
+            tile.ease({
+                opacity: 90,
+                duration: 90,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                onComplete: () => {
+                    tile.ease({
+                        opacity: 255,
+                        duration: 90,
+                        mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                    });
+                },
+            });
+            launch();
+            return GLib.SOURCE_REMOVE;
+        });
+
+        // Beat 3 — DISSOLVE (380-640ms): scale + fade.
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 380, () => {
+            tile.ease({
+                scale_x: 2.2, scale_y: 1.0,
+                opacity: 0,
+                duration: 260,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                onComplete: () => done(),
             });
             return GLib.SOURCE_REMOVE;
         });
