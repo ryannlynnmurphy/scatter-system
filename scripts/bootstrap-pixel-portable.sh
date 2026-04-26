@@ -11,17 +11,22 @@
 # Workflow on the phone:
 #   1. Install F-Droid (browser → f-droid.org → APK)
 #   2. From F-Droid: install Termux (NOT the Play Store version — stale)
-#   3. Open Termux:
+#   3. Install the Tailscale Android app (from Play Store or F-Droid).
+#      Sign in with the same account the laptop uses. The Android app
+#      handles the VPN service — Termux's `tailscale` CLI was removed
+#      from the package repo and is no longer available, but it isn't
+#      needed because the Android app already runs the tunnel.
+#   4. Open Termux:
 #        pkg update && pkg upgrade -y
-#        pkg install -y proot-distro tailscale openssh git python curl
-#   4. Install Tailscale (Termux side, NOT inside proot — needs Android VPN):
-#        tailscale up
-#        # follow the URL to authenticate the phone into the tailnet
+#        pkg install -y proot-distro openssh git python curl
 #   5. Drop into Debian proot:
 #        proot-distro install debian
 #        proot-distro login debian
 #   6. Inside the proot, fetch + run this script:
-#        curl -fsSL https://raw.githubusercontent.com/ryannlynnmurphy/scatter-system/master/scripts/bootstrap-pixel-portable.sh | bash
+#        SCATTER_TAILNET_SUFFIX=tailXXXXXX.ts.net \
+#          bash <(curl -fsSL https://raw.githubusercontent.com/ryannlynnmurphy/scatter-system/master/scripts/bootstrap-pixel-portable.sh)
+#      (find the tailnet suffix on the laptop:
+#         tailscale status --json | grep MagicDNSSuffix)
 #
 # After bootstrap completes, on the LAPTOP, add the phone to ~/.scatter/cluster.json
 # as a fifth worker with role:"burst" (see "On the laptop" section at the bottom of
