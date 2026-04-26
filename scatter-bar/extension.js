@@ -1216,7 +1216,7 @@ export default class ScatterBarExtension extends Extension {
             // the face. Width fills the rest of the bottom edge minus a
             // generous right margin.
             const ENTRY_H = 56;
-            const ENTRY_GAP = 20;
+            const ENTRY_GAP = 96;
             const RIGHT_PAD = CORNER_PAD;
             const entryX = faceX + FACE_W + ENTRY_GAP;
             const entryW = Math.max(
@@ -1241,7 +1241,7 @@ export default class ScatterBarExtension extends Extension {
             const revealWidth = cols * orbSize + (cols - 1) * orbGap + padding * 2;
             const revealHeight = rowsInTallest * orbSize + (rowsInTallest - 1) * orbGap + padding * 2;
             this._reveal.set_size(revealWidth, revealHeight);
-            const APPS_GAP = 16;
+            const APPS_GAP = 72;
             const revealX = faceX + Math.round((FACE_W - revealWidth) / 2);
             const revealY = Math.max(monitor.y + 24, faceY - APPS_GAP - revealHeight);
             this._reveal.set_position(revealX, revealY);
