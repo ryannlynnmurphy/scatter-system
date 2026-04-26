@@ -146,19 +146,21 @@
     spacing: 24px;
 }
 
-/* Tile = 72px square with diffuse green ambient bleed. JS set_size enforces
- * the 72 — CSS width alone gets overridden by the inherited shell theme.
- * Sized down from 96 so a single 10-tile column fits on 1080p above the bowtie. */
+/* Tile is square; JS owns the actual size (set_size + inline set_style)
+ * so the column can shrink to fit when many apps are pinned. CSS only
+ * provides a default for cases where JS hasn't run yet — !important
+ * was here previously but it beat the inline style and pushed bottom
+ * orbs below the screen on 1440×900. */
 .scatter-reveal-item {
     background-color: rgba(12, 12, 12, 0.82) !important;
     background-gradient-direction: none;
     background-image: none !important;
     border: 1px solid rgba(74, 222, 128, 0.20) !important;
     border-radius: 4px !important;
-    width: 72px !important;
-    height: 72px !important;
-    min-width: 72px !important;
-    min-height: 72px !important;
+    width: 72px;
+    height: 72px;
+    min-width: 0;
+    min-height: 0;
     padding: 0 !important;
     margin: 0 !important;
     box-shadow: 0 0 32px rgba(74, 222, 128, 0.20),
@@ -174,10 +176,8 @@
 }
 
 .scatter-orb-inner {
-    width: 72px;
-    height: 72px;
-    min-width: 72px;
-    min-height: 72px;
+    min-width: 0;
+    min-height: 0;
 }
 
 .scatter-reveal-glyph {

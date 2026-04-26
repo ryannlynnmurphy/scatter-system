@@ -1,0 +1,191 @@
+  <!DOCTYPE html>
+  <html lang="en">
+  <head>
+  <meta charset="UTF-8">
+  <title>Scatter</title>
+  <link rel="stylesheet" href="/tokens.css">
+  <style>
+  /* Local aliases derive from the canonical scatter-design-system tokens
+   * (served from /tokens.css). Update tokens.css once and every Scatter
+   * web surface that <link>s it picks up the change. The aliases below
+   * are kept so existing rules in this file keep working unchanged. */
+  :root {
+    --bg:    var(--scatter-black);
+    --fg:    var(--scatter-bright);
+    --dim:   var(--scatter-quiet);
+    --amber: var(--scatter-amber);
+    --green: #00ff88;
+    --err:   #ff6b6b;
+    --watts: var(--scatter-watts, var(--scatter-amber-dim));
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--bg); color: var(--fg);                                                                                                   
+    font-family: "Victor Mono", "JetBrains Mono", ui-monospace, monospace;
+    height: 100vh; overflow: hidden;                                                                                                           
+  }                                                                                                                                            
+  body { display: flex; flex-direction: column; padding: 24px; gap: 16px; }
+  header {                                                                                                                                     
+    display: flex; justify-content: space-between; align-items: baseline;
+    padding-bottom: 12px; border-bottom: 1px solid var(--dim);                                                                                 
+  }
+  header h1 { font-size: 14px; font-weight: normal; letter-spacing: 2px; }                                                                     
+  header .ipw { font-size: 11px; color: var(--dim); }                                                                                          
+  main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 8px; }
+  .call { border-left: 2px solid var(--dim); padding-left: 12px; }                                                                             
+  .call .meta { font-size: 11px; color: var(--dim); display: flex; gap: 12px; }
+  .call .route { text-transform: uppercase; letter-spacing: 1px; }
+  .call .meta .joules { color: var(--watts); font-variant-numeric: tabular-nums; }
+  .call [data-route="cloud:sonnet"] { color: var(--amber); }                                                                                   
+  .call [data-route="local:qwen"], .call [data-route="local:launch"] { color: var(--green); }
+  .call [data-route="local:shell"] { color: var(--dim); }                                                                                      
+  .call .message { margin-top: 4px; color: var(--fg); }
+  .call .response { margin-top: 4px; white-space: pre-wrap; color: var(--fg); font-size: 13px; }                                               
+  .call.err .meta span { color: var(--err); }                                                                                                  
+  form { display: flex; gap: 12px; align-items: center; border-top: 1px solid var(--dim); padding-top: 16px; }                                 
+  input[type=text] {                                                                                                                           
+    flex: 1; background: transparent; border: none; color: var(--fg);                                                                          
+    font-family: inherit; font-size: 14px; font-style: italic; outline: none;                                                                  
+  }               
+  input[type=text]::placeholder { color: var(--dim); font-style: italic; }                                                                     
+  button {                                                                                                                                     
+    background: transparent; border: 1px solid var(--amber); color: var(--amber);
+    font-family: inherit; font-size: 12px; padding: 8px 16px; cursor: pointer;                                                                 
+    letter-spacing: 1px;
+  }                                                                                                                                            
+  .local-toggle { font-size: 11px; color: var(--dim); display: flex; align-items: center; gap: 6px; }
+  .stats { font-size: 11px; color: var(--dim); display: grid; grid-template-columns: 1fr auto auto auto auto; gap: 4px 16px; padding-bottom: 8px; border-bottom: 1px solid var(--dim); }
+  .stats .hdr { color: var(--dim); letter-spacing: 1px; text-transform: uppercase; font-size: 10px; }
+  .stats .route { letter-spacing: 1px; }
+  .stats [data-route="cloud:sonnet"] { color: var(--amber); }
+  .stats [data-route="local:qwen"], .stats [data-route="local:launch"] { color: var(--green); }
+  .stats [data-route="local:shell"] { color: var(--dim); }
+  .stats .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--fg); }
+  .stats .ipw { color: var(--amber); }
+  </style>                                                                                                                                     
+  </head>         
+  <body>                                                                                                                                       
+  <header>
+    <h1>SCATTER</h1>                                                                                                                           
+    <div class="ipw" id="ipw">loading...</div>
+  </header>
+  <div class="stats" id="stats"></div>
+  <main id="stream"></main>
+  <form id="form">
+    <input type="text" id="input" placeholder="talk to scatter — launch, edit, ask, teach" autofocus autocomplete="off">                       
+    <label class="local-toggle"><input type="checkbox" id="prefer-local">local only</label>
+    <button type="submit">send</button>                                                                                                        
+  </form>         
+  <script>                                                                                                                                     
+  const stream = document.getElementById('stream');
+  const form = document.getElementById('form');                                                                                                
+  const input = document.getElementById('input');
+  const preferLocal = document.getElementById('prefer-local');                                                                                 
+  const ipwEl = document.getElementById('ipw');
+  const statsEl = document.getElementById('stats');
+                                                                                                                                               
+  async function refreshIpw() {
+    try {                                                                                                                                      
+      const r = await fetch('/ipw-summary');
+      const d = await r.json();
+      ipwEl.textContent = `${d.tokens} tokens · ${d.watt_hours.toFixed(3)} Wh · ${d.calls} calls (24h)`;
+    } catch (e) { ipwEl.textContent = 'ipw offline'; }
+  }
+
+  async function refreshStats() {
+    try {
+      const r = await fetch('/stats');
+      const d = await r.json();
+      if (!d.routes.length) { statsEl.innerHTML = ''; return; }
+      const hdr = `
+        <div class="hdr">route</div>
+        <div class="hdr num">calls</div>
+        <div class="hdr num">tokens</div>
+        <div class="hdr num">Ws</div>
+        <div class="hdr num">tok/Ws</div>`;
+      const rows = d.routes.map(r => `
+        <div class="route" data-route="${r.route}">${r.route}</div>
+        <div class="num">${r.calls}</div>
+        <div class="num">${r.tokens}</div>
+        <div class="num">${r.watt_seconds.toFixed(1)}</div>
+        <div class="num ipw">${r.tokens_per_watt_second ?? '—'}</div>`).join('');
+      statsEl.innerHTML = hdr + rows;
+    } catch (e) { statsEl.innerHTML = ''; }
+  }                                                                                                                                            
+                                                                                                                                               
+  function render(call, response) {                                                                                                            
+    const el = document.createElement('div');
+    el.className = 'call';
+    // Joules badge — never invite false comparisons. Local routes show a
+    // single `~XJ (estimated)` label. Cloud routes show `~XJ (laptop only;
+    // DC share not measured)` so a reader doesn't conclude cloud is greener
+    // when the datacenter portion is just hidden, not zero.
+    const joules = response.watt_seconds != null
+      ? (response.watts_complete === false
+          ? `<span class="joules">~${response.watt_seconds.toFixed(1)}J (laptop only; DC share not measured)</span>`
+          : `<span class="joules">~${response.watt_seconds.toFixed(1)}J (estimated)</span>`)
+      : '';
+    el.innerHTML = `
+      <div class="meta">
+        <span class="route" data-route="${response.route}">${response.route}</span>
+        <span>${response.tokens} tokens</span>
+        <span>${response.ms}ms</span>
+        ${joules}
+      </div>
+      <div class="message">&gt; ${call}</div>
+      <div class="response"></div>
+    `;
+    el.querySelector('.response').textContent = response.response;                                                                             
+    stream.appendChild(el);
+    stream.scrollTop = stream.scrollHeight;                                                                                                    
+  }               
+
+  form.addEventListener('submit', async (e) => {                                                                                               
+    e.preventDefault();
+    const message = input.value.trim();                                                                                                        
+    if (!message) return;
+    input.value = '';
+    const pending = document.createElement('div');
+    pending.className = 'call';                                                                                                                
+    pending.innerHTML = `<div class="meta"><span>routing…</span></div><div class="message">&gt; ${message}</div>`;
+    stream.appendChild(pending);                                                                                                               
+    stream.scrollTop = stream.scrollHeight;
+    try {                                                                                                                                      
+      const r = await fetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, prefer_local: preferLocal.checked }),
+      });
+      const d = await r.json().catch(() => ({}));
+      pending.remove();
+      if (!r.ok) {
+        // FastAPI errors come back as {detail: "..."}. Surface it instead of
+        // rendering a blank call. Without this, "all workers failed" was silent.
+        const detail = (d && d.detail) ? (typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail)) : `HTTP ${r.status}`;
+        const errEl = document.createElement('div');
+        errEl.className = 'call err';
+        errEl.innerHTML = `<div class="meta"><span>error · HTTP ${r.status}</span></div><div class="message">&gt; ${message}</div><div class="response"></div>`;
+        errEl.querySelector('.response').textContent = detail;
+        stream.appendChild(errEl);
+        stream.scrollTop = stream.scrollHeight;
+      } else {
+        render(message, d);
+        refreshIpw();
+        refreshStats();
+      }
+    } catch (err) {
+      pending.remove();
+      const errEl = document.createElement('div');
+      errEl.className = 'call err';
+      errEl.innerHTML = `<div class="meta"><span>error</span></div><div class="response">${err.message}</div>`;
+      stream.appendChild(errEl);
+    }                                                                                                                                          
+  });
+                                                                                                                                               
+  refreshIpw();
+  refreshStats();
+  setInterval(refreshIpw, 10000);
+  setInterval(refreshStats, 10000);
+  </script>
+  </body>
+  </html>

@@ -1,9 +1,21 @@
-/* Scatter Watts indicator — climate hacker typography in the top bar. */
-
+/* Scatter Watts indicator — climate-hacker typography in the top bar.
+ *
+ * Color is desaturated amber (the --scatter-watts token), not lush green.
+ * Per CORE_SYNTHESIS.md #9: until a calibrated USB power meter sits on
+ * the laptop, every watt number is an estimate. Confident green would
+ * lie. Desaturated amber + a `~` prefix on the label is the legibility:
+ * "this is an estimate, not a measurement." When calibration lands the
+ * `~` drops and the color may shift, but not before.
+ *
+ * GNOME Shell CSS does not reliably support :root variables across all
+ * shell versions, so the value is inlined here. Source of truth lives at
+ * scatter-design-system/tokens.css → --scatter-watts (#b88a3a). Keep
+ * these in sync by hand when tokens.css changes.
+ */
 .scatter-watts-label {
     font-family: 'JetBrains Mono', 'Ubuntu Mono', monospace;
     font-size: 11px;
-    color: #00ff88;
+    color: #b88a3a;
     padding: 0 8px;
     letter-spacing: 0.04em;
 }

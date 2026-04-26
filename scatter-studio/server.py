@@ -89,7 +89,7 @@ def extract_html(text):
     # Last resort: wrap it
     return f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<style>body{{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:system-ui;background:#111;color:#eee}}</style>
+<style>body{{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:'Inter',system-ui,sans-serif;background:#0a0a0a;color:#e5e5e5}}</style>
 </head><body><div>{stripped}</div></body></html>"""
 
 
@@ -230,7 +230,7 @@ EMPTY_PREVIEW = """<!DOCTYPE html>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { min-height: 100vh; display: flex; align-items: center; justify-content: center;
-       font-family: system-ui, -apple-system, sans-serif; background: #0a0a0a; color: #555; }
+       font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #0a0a0a; color: #555; }
 .empty { text-align: center; }
 .empty h2 { font-size: 1.5rem; font-weight: 300; margin-bottom: 0.5rem; color: #333; }
 .empty p { font-size: 0.9rem; color: #444; }
@@ -253,9 +253,9 @@ body {
     height: 100vh;
     display: grid;
     grid-template-columns: 380px 1fr;
-    font-family: system-ui, -apple-system, sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
     background: #0a0a0a;
-    color: #e0e0e0;
+    color: #e5e5e5;
 }
 
 /* Chat panel */
@@ -330,7 +330,7 @@ body {
     flex: 1;
     background: #151515;
     border: 1px solid #2a2a2a;
-    color: #e0e0e0;
+    color: #e5e5e5;
     padding: 12px 16px;
     border-radius: 12px;
     font-size: 0.9rem;

@@ -1,0 +1,236 @@
+#!/usr/bin/env bash
+# bootstrap-pixel-portable.sh
+#
+# Turn a GrapheneOS Pixel into "portable Scatter" — a self-contained
+# Scatter node that:
+#   • Joins the home cluster over Tailscale when networked
+#   • Falls back to local Ollama on the phone when offline
+#   • Runs the same scatter-router/server.py as the laptop
+#
+# RUN THIS ON THE PHONE, INSIDE TERMUX'S PROOT DEBIAN.
+# Workflow on the phone:
+#   1. Install F-Droid (browser → f-droid.org → APK)
+#   2. From F-Droid: install Termux (NOT the Play Store version — stale)
+#   3. Install the Tailscale Android app (from Play Store or F-Droid).
+#      Sign in with the same account the laptop uses. The Android app
+#      handles the VPN service — Termux's `tailscale` CLI was removed
+#      from the package repo and is no longer available, but it isn't
+#      needed because the Android app already runs the tunnel.
+#   4. Open Termux:
+#        pkg update && pkg upgrade -y
+#        pkg install -y proot-distro openssh git python curl
+#   5. Drop into Debian proot:
+#        proot-distro install debian
+#        proot-distro login debian
+#   6. Inside the proot, fetch + run this script:
+#        SCATTER_TAILNET_SUFFIX=tailXXXXXX.ts.net \
+#          bash <(curl -fsSL https://raw.githubusercontent.com/ryannlynnmurphy/scatter-system/master/scripts/bootstrap-pixel-portable.sh)
+#      (find the tailnet suffix on the laptop:
+#         tailscale status --json | grep MagicDNSSuffix)
+#
+# After bootstrap completes, on the LAPTOP, add the phone to ~/.scatter/cluster.json
+# as a fifth worker with role:"burst" (see "On the laptop" section at the bottom of
+# this script, printed at the end of run).
+
+set -euo pipefail
+
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+RESET='\033[0m'
+
+say()  { printf "${GREEN}>> %s${RESET}\n" "$*"; }
+warn() { printf "${YELLOW}!! %s${RESET}\n" "$*"; }
+die()  { printf "${RED}xx %s${RESET}\n" "$*"; exit 1; }
+
+# ── Sanity: am I actually on the phone? ─────────────────────────────────
+# This script provisions the Pixel as portable Scatter. Running it on
+# anything else (laptop, a Pi, a CI box) will fail in confusing ways:
+# wrong arch for ollama install, no sudo when apt needs it, possibly
+# clobbering the laptop's own ~/scatter-system clone. Guard hard.
+
+ALLOW_ANYWHERE="${SCATTER_BOOTSTRAP_ANYWHERE:-0}"
+
+is_termux_proot() {
+  # Termux's proot-distro mounts the host /data/data path inside the proot,
+  # and exports PROOT_TMP_DIR. Either signal is enough.
+  [ -d /data/data/com.termux ] || [ -n "${PROOT_TMP_DIR:-}" ]
+}
+
+if ! is_termux_proot && [ "$ALLOW_ANYWHERE" != "1" ]; then
+  printf "${RED}xx not running inside Termux's Debian proot.${RESET}\n\n"
+  printf "this script provisions the Pixel 9a as portable Scatter. it is\n"
+  printf "not meant to run on the laptop, the Pis, or any other machine.\n\n"
+  printf "to run it on the phone:\n"
+  printf "  1. open Termux on the Pixel (install from F-Droid if needed)\n"
+  printf "  2. inside Termux:  pkg install proot-distro\n"
+  printf "  3.                 proot-distro install debian\n"
+  printf "  4.                 proot-distro login debian\n"
+  printf "  5. inside the proot, fetch + run this script:\n"
+  printf "       curl -fsSL https://raw.githubusercontent.com/ryannlynnmurphy/scatter-system/master/scripts/bootstrap-pixel-portable.sh | bash\n\n"
+  printf "if you really mean to run it here, set SCATTER_BOOTSTRAP_ANYWHERE=1.\n"
+  printf "(this skips the guard. on the laptop you'll likely also need sudo.)\n"
+  exit 1
+fi
+
+if [ ! -f /etc/debian_version ]; then
+  die "this script needs Debian (the proot installs it). got: $(. /etc/os-release 2>/dev/null && echo "$PRETTY_NAME" || echo unknown)"
+fi
+
+if [ "$(uname -m)" != "aarch64" ] && [ "$ALLOW_ANYWHERE" != "1" ]; then
+  die "expected aarch64 (Pixel SoC), got $(uname -m). this is the phone-only script — set SCATTER_BOOTSTRAP_ANYWHERE=1 to override."
+fi
+
+say "bootstrapping portable Scatter on $(uname -mr)"
+
+# ── 1. System packages ──────────────────────────────────────────────────
+
+say "apt update + base packages"
+apt-get update -qq
+apt-get install -y -qq curl git ca-certificates python3 python3-venv python3-pip
+say "  ok"
+
+# ── 2. Ollama ───────────────────────────────────────────────────────────
+
+if ! command -v ollama >/dev/null 2>&1; then
+  say "installing Ollama (CPU build for aarch64)"
+  curl -fsSL https://ollama.com/install.sh | sh
+else
+  say "ollama already installed: $(ollama --version 2>&1 | head -1)"
+fi
+
+# Ollama in proot can't use systemd, so run as a background process.
+if ! pgrep -fa "ollama serve" >/dev/null; then
+  say "starting ollama serve in background"
+  mkdir -p ~/.ollama
+  nohup ollama serve > ~/.ollama/serve.log 2>&1 &
+  sleep 3
+fi
+
+if ! curl -sS --max-time 3 http://127.0.0.1:11434/api/tags >/dev/null 2>&1; then
+  die "ollama serve didn't come up — check ~/.ollama/serve.log"
+fi
+say "  ollama listening on 127.0.0.1:11434"
+
+# ── 3. Pull the model (~2GB, takes a while on cellular) ─────────────────
+
+if ! ollama list 2>/dev/null | grep -q "llama3.2:3b"; then
+  say "pulling llama3.2:3b (~2GB; consider being on Wi-Fi)"
+  ollama pull llama3.2:3b
+else
+  say "llama3.2:3b already present"
+fi
+
+# ── 4. Clone scatter-system ─────────────────────────────────────────────
+
+if [ ! -d ~/scatter-system ]; then
+  say "cloning scatter-system"
+  git clone https://github.com/ryannlynnmurphy/scatter-system.git ~/scatter-system
+else
+  say "scatter-system already cloned, pulling latest"
+  git -C ~/scatter-system pull --rebase || warn "pull failed; continuing"
+fi
+
+# ── 5. Python venv + deps for the router ────────────────────────────────
+
+cd ~/scatter-system/scatter-router
+if [ ! -d .venv ]; then
+  say "creating venv"
+  python3 -m venv .venv
+fi
+
+say "installing python deps"
+./.venv/bin/pip install -q --upgrade pip
+# Source of truth is scatter-router/requirements.txt — same versions the
+# laptop runs. Avoids drift between phone and laptop deps.
+if [ -f requirements.txt ]; then
+  ./.venv/bin/pip install -q -r requirements.txt
+else
+  warn "no requirements.txt found, falling back to unpinned install"
+  ./.venv/bin/pip install -q fastapi uvicorn anthropic httpx python-dotenv pydantic
+fi
+
+# ── 6. Phone-side cluster.json ──────────────────────────────────────────
+# The phone's manifest prefers the home tailnet workers (when reachable)
+# and falls back to its own Ollama. Tailnet suffix can be supplied via
+# SCATTER_TAILNET_SUFFIX env var (e.g. tail33bb49.ts.net) to skip the
+# manual EXAMPLE.ts.net edit. If not provided, leaves the placeholder
+# and prints a reminder at the end.
+
+mkdir -p ~/.scatter
+
+TAILNET="${SCATTER_TAILNET_SUFFIX:-EXAMPLE.ts.net}"
+if [ "$TAILNET" = "EXAMPLE.ts.net" ]; then
+  warn "SCATTER_TAILNET_SUFFIX not set — phone cluster.json will need manual edit."
+  warn "find your suffix on the laptop: tailscale status --json | grep MagicDNSSuffix"
+else
+  say "tailnet suffix: $TAILNET"
+fi
+
+if [ ! -f ~/.scatter/cluster.json ]; then
+  say "writing phone cluster.json"
+  cat > ~/.scatter/cluster.json <<JSON
+{
+  "head_node": "localhost",
+  "_note": "tailnet workers; if hosts are unreachable, falls back to local pixel ollama",
+  "workers": [
+    {"host": "pi-1",      "endpoint": "http://pi-1.${TAILNET}:11434",   "model": "llama3.2:3b", "capabilities": ["inference"], "role": "primary"},
+    {"host": "pi-2",      "endpoint": "http://pi-2.${TAILNET}:11434",   "model": "llama3.2:3b", "capabilities": ["inference"], "role": "primary"},
+    {"host": "pi-3",      "endpoint": "http://pi-3.${TAILNET}:11434",   "model": "llama3.2:3b", "capabilities": ["inference"], "role": "primary"},
+    {"host": "pi-4",      "endpoint": "http://pi-4.${TAILNET}:11434",   "model": "llama3.2:3b", "capabilities": ["inference"], "role": "primary"},
+    {"host": "scatter",   "endpoint": "http://scatter.${TAILNET}:11434", "model": "llama3.2:3b", "capabilities": ["inference"], "role": "primary"},
+    {"host": "pixel-self","endpoint": "http://127.0.0.1:11434",          "model": "llama3.2:3b", "capabilities": ["inference"], "role": "fallback"}
+  ]
+}
+JSON
+else
+  say "~/.scatter/cluster.json already exists, leaving it alone"
+fi
+
+# ── 7. Smoke test ───────────────────────────────────────────────────────
+
+say "smoke testing local inference (this loads the model — ~30s on first run)"
+cd ~/scatter-system/scatter-router
+./.venv/bin/python - <<'PY'
+import server
+data, w = server._ollama_chat({
+    "model": "llama3.2:3b",
+    "messages": [{"role": "user", "content": "say hi in three words"}],
+    "stream": False,
+    "options": {"num_predict": 16},
+}, timeout=120)
+print(f"  worker: {w['host']}  reply: {data['message']['content'][:60]}")
+PY
+
+# ── 8. Persistent autostart for the router (Termux side) ────────────────
+
+cat <<'POST'
+
+──────────────────────────────────────────────────────────────────────
+portable Scatter bootstrap complete on the phone.
+
+NEXT (still on the phone):
+  • Edit ~/.scatter/cluster.json — replace EXAMPLE.ts.net with your real
+    tailnet suffix (run `tailscale status` from a Termux shell to see it).
+  • Start the router whenever you want it running:
+        cd ~/scatter-system/scatter-router
+        ./.venv/bin/uvicorn server:app --host 127.0.0.1 --port 8787 &
+  • Open http://127.0.0.1:8787/ in any phone browser to use Scatter.
+
+NEXT (back on the laptop):
+  • Add the phone as a fifth worker in ~/.scatter/cluster.json:
+        {"host": "pixel-9a",
+         "endpoint": "http://pixel-9a.<your-tailnet>.ts.net:11434",
+         "model": "llama3.2:3b",
+         "capabilities": ["inference"],
+         "role": "burst"}
+    (role:"burst" means the laptop only spills over to the phone when
+    every Pi primary is exhausted — phones throttle under sustained load.)
+  • Restart the router so it re-reads cluster.json:
+        pkill -f "uvicorn server:app"
+        # autostart will bring it back, or run setsid manually
+  • Smoke test:
+        curl http://pixel-9a.<your-tailnet>.ts.net:11434/api/tags
+
+──────────────────────────────────────────────────────────────────────
+POST
