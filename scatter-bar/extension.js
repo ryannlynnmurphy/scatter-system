@@ -50,16 +50,122 @@ const MOTION_RISE_PX = 16;
 // before the column overruns 1080p screens. Phase 2 tools (Excalidraw,
 // VLC, Blanket, Stirling-PDF, etc.) are reachable via prompt verbs even
 // without a visible orb (see ACTION_MAP).
-const APPS = [
-    { label: 'Scatter',      exec: 'bash -lc "$HOME/scatter-system/scatter-browser/launcher.sh"',                            desktop_id: 'scatter-browser.desktop',         glyph: '>-<', brand: 'scatter-browser' },
-    { label: 'AppFlowy',     exec: 'flatpak run io.appflowy.AppFlowy',                                                       desktop_id: 'io.appflowy.AppFlowy.desktop',    glyph: '[]',  brand: 'appflowy' },
-    { label: 'OnlyOffice',   exec: 'flatpak run org.onlyoffice.desktopeditors',                                              desktop_id: 'org.onlyoffice.desktopeditors.desktop', glyph: '|=|', brand: 'onlyoffice' },
-    { label: 'Zotero',       exec: 'flatpak run org.zotero.Zotero',                                                          desktop_id: 'org.zotero.Zotero.desktop',       glyph: '{ }', brand: 'zotero' },
-    { label: 'Files',        exec: 'nautilus',                                                                               desktop_id: 'org.gnome.Nautilus.desktop',      glyph: '[ ]', brand: 'files' },
-    { label: 'Scatter Code', exec: 'gnome-terminal -- bash -lc "cd ~/scatter-system && exec bash"',                          glyph: '</>', brand: 'scatter-code' },
-    { label: 'Claude Code',  exec: 'gnome-terminal -- bash -lc "claude || bash"',                                            glyph: '[c]', brand: 'claude-code' },
-    { label: 'Terminal',     exec: 'gnome-terminal',                                                                         desktop_id: 'org.gnome.Terminal.desktop',      glyph: ' _ ', brand: 'terminal' },
+// Pixel-art logos live alongside the extension. One PNG per app, generated
+// by generate_icons.py — the same grammar as the plymouth (◉.◉) face. Owning
+// our own marks means every app reads as Scatter, not eight vendors.
+const ICONS_DIR = GLib.build_filenamev([
+    GLib.get_home_dir(), 'scatter-system', 'scatter-bar', 'icons',
+]);
+const _icon = (name) => GLib.build_filenamev([ICONS_DIR, `${name}.png`]);
+
+// User-pinned apps live at ~/.config/scatter/pinned-apps.json. Each entry:
+//   { label, exec, desktop_id?, icon_path? }
+// Pinned apps slot into the column between the eight defaults and All Apps,
+// so the column reads (top→bottom): All Apps, pins…, defaults…, bowtie.
+const PINS_FILE = GLib.build_filenamev([
+    GLib.get_user_config_dir(), 'scatter', 'pinned-apps.json',
+]);
+
+function _readPins() {
+    try {
+        const file = Gio.File.new_for_path(PINS_FILE);
+        if (!file.query_exists(null)) return [];
+        const [ok, contents] = file.load_contents(null);
+        if (!ok) return [];
+        const text = new TextDecoder().decode(contents);
+        const parsed = JSON.parse(text);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch (e) {
+        log(`scatter-bar: pinned-apps read failed: ${e.message || e}`);
+        return [];
+    }
+}
+
+function _writePins(pins) {
+    try {
+        const dir = GLib.path_get_dirname(PINS_FILE);
+        GLib.mkdir_with_parents(dir, 0o755);
+        const text = JSON.stringify(pins, null, 2);
+        const file = Gio.File.new_for_path(PINS_FILE);
+        const enc = new TextEncoder().encode(text);
+        file.replace_contents(enc, null, false, Gio.FileCreateFlags.NONE, null);
+    } catch (e) {
+        log(`scatter-bar: pinned-apps write failed: ${e.message || e}`);
+    }
+}
+
+// Each app carries a one-line "story" — what it does, why it earns its
+// pixel on the bar. Surfaced in the tooltip on hover so the apps reveal
+// reads as a guided tour, not a mystery grid of icons.
+const DEFAULT_APPS = [
+    { label: 'Scatter',      story: 'the canvas. say what you want to make.',                exec: 'bash -lc "$HOME/scatter-system/scatter-browser/launcher.sh"',                glyph: '>-<', brand: 'scatter-browser', icon_path: _icon('scatter-browser') },
+    { label: 'AppFlowy',     story: 'notes & docs that stay on this machine.',               exec: 'flatpak run io.appflowy.AppFlowy',                                           glyph: '[]',  brand: 'appflowy',        icon_path: _icon('appflowy') },
+    { label: 'OnlyOffice',   story: 'word, sheet, slides — without the cloud.',              exec: 'flatpak run org.onlyoffice.desktopeditors',                                  glyph: '|=|', brand: 'onlyoffice',      icon_path: _icon('onlyoffice') },
+    { label: 'Zotero',       story: 'every paper you read, indexed for you.',                exec: 'flatpak run org.zotero.Zotero',                                              glyph: '{ }', brand: 'zotero',          icon_path: _icon('zotero') },
+    { label: 'Files',        story: 'the folders. for when you want to look directly.',      exec: 'nautilus',                                                                   glyph: '[ ]', brand: 'files',           icon_path: _icon('files') },
+    { label: 'Scatter Code', story: 'a shell pointed at this OS. you can edit it.',          exec: 'gnome-terminal -- bash -lc "cd ~/scatter-system && exec bash"',              glyph: '</>', brand: 'scatter-code',    icon_path: _icon('scatter-code') },
+    { label: 'Claude Code',  story: 'cloud mind. for the hard problems.',                    exec: 'gnome-terminal -- bash -lc "claude || bash"',                                glyph: '[c]', brand: 'claude-code',     icon_path: _icon('claude-code') },
+    { label: 'Terminal',     story: 'the unix prompt. the developer’s own door.',       exec: 'gnome-terminal',                                                             glyph: ' _ ', brand: 'terminal',        icon_path: _icon('terminal') },
 ];
+
+const ALL_APPS_TILE = { label: 'All Apps', story: 'every app installed. pinned ones rise to the top.', exec: '__overview_apps', glyph: '###', brand: 'all-apps', icon_path: _icon('all-apps') };
+const HISTORY_TILE  = { label: 'History',  story: 'past conversations with scatter.',                  exec: '__history',       glyph: '···', brand: 'history',  icon_path: _icon('history') };
+
+// Chat history persistence. Append-only NDJSON at ~/.config/scatter/chats.jsonl.
+// Each line: { ts: ISO8601, prompt, reply, route }. The journal is the truth;
+// the history modal is a view over it.
+const CHATS_FILE = GLib.build_filenamev([
+    GLib.get_user_config_dir(), 'scatter', 'chats.jsonl',
+]);
+
+function _appendChat(entry) {
+    try {
+        const dir = GLib.path_get_dirname(CHATS_FILE);
+        GLib.mkdir_with_parents(dir, 0o755);
+        const line = JSON.stringify(entry) + '\n';
+        const file = Gio.File.new_for_path(CHATS_FILE);
+        const stream = file.append_to(Gio.FileCreateFlags.NONE, null);
+        stream.write_all(new TextEncoder().encode(line), null);
+        stream.close(null);
+    } catch (e) {
+        log(`scatter-bar: chat append failed: ${e.message || e}`);
+    }
+}
+
+function _readChats() {
+    try {
+        const file = Gio.File.new_for_path(CHATS_FILE);
+        if (!file.query_exists(null)) return [];
+        const [ok, contents] = file.load_contents(null);
+        if (!ok) return [];
+        const text = new TextDecoder().decode(contents);
+        const lines = text.split('\n').filter(l => l.trim().length > 0);
+        const out = [];
+        for (const l of lines) {
+            try { out.push(JSON.parse(l)); } catch (_) { /* skip malformed */ }
+        }
+        return out;
+    } catch (e) {
+        log(`scatter-bar: chat read failed: ${e.message || e}`);
+        return [];
+    }
+}
+
+// Compose the live APPS list: defaults, then pins, then All Apps at the top.
+function _buildApps() {
+    const pins = _readPins().map(p => ({
+        label: p.label || 'pinned',
+        exec: p.exec || '',
+        desktop_id: p.desktop_id,
+        icon_path: p.icon_path,
+        glyph: '·',
+        brand: 'pinned',
+        pinned: true,
+    }));
+    return [...DEFAULT_APPS, ...pins, HISTORY_TILE, ALL_APPS_TILE];
+}
+
+let APPS = _buildApps();
 
 // Action-modality rules. Client-side first pass — zero-latency and doesn't
 // need the router for the common cases. Router handles everything else.
@@ -123,15 +229,29 @@ const ACTION_MAP = {
 const SESSION_VERBS = /\b(sleep|suspend|go to sleep|nap)\b/i;
 const SESSION_CMD = 'systemctl suspend';
 
+// Pin verbs: `pin <name>` / `unpin <name>` add/remove apps in the column.
+// Resolves <name> against the system app list (case-insensitive substring).
+const PIN_VERB = /^(pin|unpin)\s+(.+)$/i;
+
 export default class ScatterBarExtension extends Extension {
     enable() {
+        const VERSION_MARKER = `SCATTER-BAR-LOADED-${Date.now()}`;
+        try {
+            const f = Gio.File.new_for_path('/tmp/scatter-bubble-trace.log');
+            const stream = f.append_to(Gio.FileCreateFlags.NONE, null);
+            stream.write_all(new TextEncoder().encode(`${new Date().toISOString()} ENABLE ${VERSION_MARKER}\n`), null);
+            stream.close(null);
+        } catch (_) {}
+        Main.notify('SCATTER bar enable', VERSION_MARKER);
         this._session = new Soup.Session();
         this._revealShown = false;
+        this._libraryShown = false;
 
         this._buildBar();
         this._buildRevealLayer();
         this._buildResponseOverlay();
         this._buildDesktopSurface();
+        this._buildLibrary();
         this._place();
 
         this._monitorsChangedId = Main.layoutManager.connect(
@@ -148,9 +268,13 @@ export default class ScatterBarExtension extends Extension {
             this._hideRevealTimeout = 0;
         }
         if (this._bar) { Main.layoutManager.removeChrome(this._bar); this._bar.destroy(); this._bar = null; }
+        this._gear = null;
         if (this._reveal) { Main.layoutManager.removeChrome(this._reveal); this._reveal.destroy(); this._reveal = null; }
+        if (this._tooltip) { Main.layoutManager.removeChrome(this._tooltip); this._tooltip.destroy(); this._tooltip = null; }
         if (this._overlay) { Main.layoutManager.removeChrome(this._overlay); this._overlay.destroy(); this._overlay = null; }
         if (this._desktop) { Main.layoutManager.removeChrome(this._desktop); this._desktop.destroy(); this._desktop = null; }
+        if (this._library) { Main.layoutManager.removeChrome(this._library); this._library.destroy(); this._library = null; }
+        if (this._history) { Main.layoutManager.removeChrome(this._history); this._history.destroy(); this._history = null; }
         if (this._desktopHideTimeout) { GLib.source_remove(this._desktopHideTimeout); this._desktopHideTimeout = 0; }
         this._entry = null;
         this._session = null;
@@ -170,12 +294,9 @@ export default class ScatterBarExtension extends Extension {
             track_hover: false,
         });
 
-        // The bowtie. Scatter's face — and the apps trigger. Clicking it
-        // summons the reveal layer; clicking again dismisses it. Hover and
-        // press are felt in motion, not color. Plain `>-<` text — the
-        // mascot.png stack was being eaten by the theme; the glyph IS
-        // Scatter's face on its own. Stylesheet kills liga/calt so the
-        // dash doesn't ligature into an arrow.
+        // The bowtie — Scatter's face. Plain `>-<` text. This is the
+        // iconic bar; never replace this glyph. CSS kills ligatures so the
+        // dash doesn't fuse with the gt/lt into an arrow.
         const bowtieLabel = new St.Label({
             text: '>-<',
             style_class: 'scatter-bar-bowtie',
@@ -220,6 +341,24 @@ export default class ScatterBarExtension extends Extension {
         this._entry.clutter_text.connect('activate', () => this._submit());
         this._bar.add_child(this._entry);
 
+        // Gear at the right gutter. Quiet pixel-art glyph in the boot-face
+        // grammar; opens system settings (Scatter settings panel later).
+        const gearFile = Gio.File.new_for_path(_icon('gear'));
+        const gearIcon = new St.Icon({
+            gicon: new Gio.FileIcon({ file: gearFile }),
+            style_class: 'scatter-bar-gear-icon',
+        });
+        this._gear = new St.Button({
+            style_class: 'scatter-bar-gear',
+            y_align: Clutter.ActorAlign.CENTER,
+            can_focus: true,
+            track_hover: true,
+            reactive: true,
+            child: gearIcon,
+        });
+        this._gear.connect('clicked', () => this._launch('gnome-control-center'));
+        this._bar.add_child(this._gear);
+
         Main.layoutManager.addChrome(this._bar, {
             affectsStruts: true,
             trackFullscreen: true,
@@ -230,14 +369,15 @@ export default class ScatterBarExtension extends Extension {
     // ── Reveal layer: apps slide up above the bar, one by one ──────────
 
     _buildRevealLayer() {
-        // Vertical column rising out of the bowtie. Each tile is a circular
-        // orb branded per-app — real system icon when one exists, glyph fallback
-        // for in-house apps. Click triggers that app's signature animation,
-        // which is what carries the "orb morphs into the app" story.
+        // Apps reveal — a 2-column grid that grows UP-AND-TO-THE-RIGHT from
+        // just above the bowtie. Was a single vertical column; that column
+        // grew tall enough on a 1080p display to bleed into the upper-left,
+        // colliding with GNOME's Activities corner. The grid stays anchored
+        // in the bottom-left quadrant no matter how many apps get pinned.
         this._reveal = new St.BoxLayout({
             name: 'scatterReveal',
             style_class: 'scatter-reveal',
-            vertical: true,
+            vertical: false,
             reactive: false,
         });
         // Hidden by default — clicking the bowtie summons it, clicking again
@@ -256,16 +396,20 @@ export default class ScatterBarExtension extends Extension {
             });
             // Force the orb size via JS — CSS width/height alone gets eaten
             // by the inherited shell theme, which is what made these render
-            // as narrow stadium pills instead of 96px circles.
+            // as narrow stadium pills instead of circles.
             item.set_size(96, 96);
             // Brand tint — one CSS class per app, per stylesheet.
             if (app.brand) item.add_style_class_name(`scatter-orb-${app.brand}`);
 
-            // Pull the real desktop icon when available; otherwise fall back
-            // to the glyph. The orb is the holder; what's inside is the
-            // app's identity.
+            // Pinned apps wear the generic Scatter glyph, not the vendor
+            // icon — keeps the bar reading as one register with the library.
+            // The eight hand-crafted defaults stay with their bespoke pixel
+            // art (icon_path branch below).
             let iconChild = null;
-            if (app.desktop_id) {
+            if (app.pinned) {
+                iconChild = this._makeScatterGlyphIcon(app.label, 48);
+            }
+            if (!iconChild && app.desktop_id) {
                 try {
                     const info = Gio.DesktopAppInfo.new(app.desktop_id);
                     if (info) {
@@ -277,6 +421,20 @@ export default class ScatterBarExtension extends Extension {
                                 style_class: 'scatter-orb-icon',
                             });
                         }
+                    }
+                } catch (_) { /* fall through */ }
+            }
+            // Direct file fallback — used when XDG_DATA_DIRS doesn't include
+            // flatpak's exports (gnome-shell started before flatpak install).
+            if (!iconChild && app.icon_path) {
+                try {
+                    const file = Gio.File.new_for_path(app.icon_path);
+                    if (file.query_exists(null)) {
+                        iconChild = new St.Icon({
+                            gicon: new Gio.FileIcon({ file }),
+                            icon_size: 56,
+                            style_class: 'scatter-orb-icon',
+                        });
                     }
                 } catch (_) { /* fall through to glyph */ }
             }
@@ -306,16 +464,41 @@ export default class ScatterBarExtension extends Extension {
             item.connect('clicked', () => {
                 this._launchFromTile(item, app);
             });
-            item.connect('enter-event', () => this._magnifyTile(item));
-            item.connect('leave-event', () => this._settleTile(item));
+            item.connect('enter-event', () => {
+                this._magnifyTile(item);
+                this._showTooltip(item, app.label, app.story);
+            });
+            item.connect('leave-event', () => {
+                this._settleTile(item);
+                this._hideTooltip();
+            });
 
             this._revealItems.push(item);
         });
 
-        // Add to the box in REVERSE so source-order index 0 sits at the bottom
-        // of the column (closest to the bowtie). Stagger by source index then
-        // gives "rises out of the face" — the bottom-most orb emerges first.
-        [...this._revealItems].reverse().forEach(item => this._reveal.add_child(item));
+        // Tooltip is created once (not recreated on rebuild) — see _ensureTooltip.
+        this._ensureTooltip();
+
+        // Pack tiles into vertical sub-columns of REVEAL_ROWS each, then add
+        // each column to the horizontal reveal box. Within a column, tiles
+        // are laid bottom-up so source-order 0 sits closest to the bowtie.
+        // Source-order then runs: bottom-of-col-1 → top-of-col-1 → bottom-of-col-2 …
+        const REVEAL_ROWS = 5;  // max tiles per column before wrapping right
+        for (let c = 0; c * REVEAL_ROWS < this._revealItems.length; c++) {
+            const col = new St.BoxLayout({
+                style_class: 'scatter-reveal-col',
+                vertical: true,
+                reactive: false,
+            });
+            const colItems = this._revealItems.slice(
+                c * REVEAL_ROWS,
+                (c + 1) * REVEAL_ROWS,
+            );
+            // Reverse within the column so index 0 of this slice is at the
+            // bottom (closest to the bowtie / closest to the bar).
+            [...colItems].reverse().forEach(item => col.add_child(item));
+            this._reveal.add_child(col);
+        }
 
         Main.layoutManager.addChrome(this._reveal, {
             affectsInputRegion: true,
@@ -376,6 +559,255 @@ export default class ScatterBarExtension extends Extension {
             translation_y: 0,
             duration: 160,
             mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        });
+    }
+
+    // ── History modal: chats grouped by date ─────────────────────────────
+    // Reads ~/.config/scatter/chats.jsonl, groups by Today / Yesterday /
+    // This Week / Older, renders in Scatter grammar. Click an entry to
+    // expand the full prompt + reply.
+
+    _showHistory() {
+        if (!this._history) this._buildHistory();
+        const monitor = Main.layoutManager.primaryMonitor;
+        if (monitor) {
+            this._history.set_position(monitor.x, monitor.y);
+            this._history.set_size(monitor.width, monitor.height);
+        }
+        this._renderHistory();
+        this._history.visible = true;
+        this._history.ease({
+            opacity: 255,
+            duration: 280,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        });
+    }
+
+    _hideHistory() {
+        if (!this._history || !this._history.visible) return;
+        this._history.ease({
+            opacity: 0,
+            duration: 200,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            onComplete: () => { if (this._history) this._history.visible = false; },
+        });
+    }
+
+    _buildHistory() {
+        this._history = new St.BoxLayout({
+            name: 'scatterHistory',
+            style_class: 'scatter-library', // share library scrim styling
+            vertical: true,
+            reactive: true,
+        });
+        this._history.visible = false;
+        this._history.opacity = 0;
+        this._history.connect('button-press-event', (actor, event) => {
+            if (event.get_source() === this._history) {
+                this._hideHistory();
+                return Clutter.EVENT_STOP;
+            }
+            return Clutter.EVENT_PROPAGATE;
+        });
+
+        const header = new St.BoxLayout({
+            style_class: 'scatter-library-header',
+            vertical: true,
+        });
+        const title = new St.Label({
+            text: 'history',
+            style_class: 'scatter-library-title',
+        });
+        header.add_child(title);
+        this._history.add_child(header);
+
+        const scroll = new St.ScrollView({
+            style_class: 'scatter-library-scroll',
+            x_expand: true,
+            y_expand: true,
+        });
+        scroll.set_policy(St.PolicyType.NEVER, St.PolicyType.AUTOMATIC);
+        this._historyList = new St.BoxLayout({
+            vertical: true,
+            x_expand: true,
+            style_class: 'scatter-history-list',
+        });
+        scroll.add_actor(this._historyList);
+        this._history.add_child(scroll);
+
+        Main.layoutManager.addChrome(this._history, {
+            affectsInputRegion: true,
+        });
+    }
+
+    _renderHistory() {
+        if (!this._historyList) return;
+        this._historyList.destroy_all_children();
+        const chats = _readChats();
+        if (chats.length === 0) {
+            this._historyList.add_child(new St.Label({
+                text: 'no chats yet — talk to scatter and your history shows up here.',
+                style_class: 'scatter-library-empty',
+            }));
+            return;
+        }
+        // Newest first, then group.
+        chats.reverse();
+        const now = new Date();
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+        const startOfYesterday = startOfToday - 86400_000;
+        const startOfThisWeek = startOfToday - 7 * 86400_000;
+        const groups = { today: [], yesterday: [], thisWeek: [], older: [] };
+        for (const c of chats) {
+            const ts = Date.parse(c.ts || '');
+            if (isNaN(ts)) { groups.older.push(c); continue; }
+            if (ts >= startOfToday) groups.today.push(c);
+            else if (ts >= startOfYesterday) groups.yesterday.push(c);
+            else if (ts >= startOfThisWeek) groups.thisWeek.push(c);
+            else groups.older.push(c);
+        }
+        const sections = [
+            ['today', groups.today],
+            ['yesterday', groups.yesterday],
+            ['this week', groups.thisWeek],
+            ['older', groups.older],
+        ];
+        for (const [label, items] of sections) {
+            if (items.length === 0) continue;
+            const heading = new St.Label({
+                text: label,
+                style_class: 'scatter-history-heading',
+            });
+            this._historyList.add_child(heading);
+            for (const c of items) this._historyList.add_child(this._buildHistoryItem(c));
+        }
+    }
+
+    _buildHistoryItem(chat) {
+        const tile = new St.Button({
+            style_class: 'scatter-history-item',
+            x_expand: true,
+            can_focus: true,
+            track_hover: true,
+            reactive: true,
+        });
+        const inner = new St.BoxLayout({ vertical: true, x_expand: true });
+        const time = new Date(chat.ts);
+        const hh = String(time.getHours()).padStart(2, '0');
+        const mm = String(time.getMinutes()).padStart(2, '0');
+        const meta = new St.Label({
+            text: `${hh}:${mm}` + (chat.route && chat.route.startsWith('cloud') ? '  ↗ claude' : ''),
+            style_class: 'scatter-history-meta',
+        });
+        const promptLabel = new St.Label({
+            text: chat.prompt || '(no prompt)',
+            style_class: 'scatter-history-prompt',
+        });
+        promptLabel.clutter_text.line_wrap = true;
+        promptLabel.clutter_text.set_ellipsize(0);
+        const replyLabel = new St.Label({
+            text: chat.reply || '',
+            style_class: 'scatter-history-reply',
+            visible: false,
+        });
+        replyLabel.clutter_text.line_wrap = true;
+        replyLabel.clutter_text.set_ellipsize(0);
+        inner.add_child(meta);
+        inner.add_child(promptLabel);
+        inner.add_child(replyLabel);
+        tile.set_child(inner);
+        // Click toggles full reply.
+        tile.connect('clicked', () => {
+            replyLabel.visible = !replyLabel.visible;
+        });
+        return tile;
+    }
+
+    // Generic Scatter app-glyph: dark tile, green initial letter, JB Mono.
+    // Used for any app that isn't one of the eight hand-crafted defaults.
+    // Library + pinned bar tiles share this exact treatment so the bar reads
+    // continuous with the library. ALL open-source apps wear Scatter grammar.
+    _makeScatterGlyphIcon(label, size) {
+        const cleaned = (label || '?').trim();
+        // First letter of the first word that starts with [A-Za-z0-9].
+        let ch = '?';
+        for (const part of cleaned.split(/\s+/)) {
+            const m = part.match(/[A-Za-z0-9]/);
+            if (m) { ch = m[0].toUpperCase(); break; }
+        }
+        const tile = new St.Widget({
+            layout_manager: new Clutter.BinLayout(),
+            style_class: 'scatter-app-glyph-tile',
+            width: size,
+            height: size,
+        });
+        const glyph = new St.Label({
+            text: ch,
+            style_class: 'scatter-app-glyph',
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+        tile.add_child(glyph);
+        return tile;
+    }
+
+    _ensureTooltip() {
+        if (this._tooltip) return;
+        // Tooltip is a two-line placard floating to the right of the hovered
+        // tile: app name on top (paper-white), story line under it (dim).
+        // The story is the WHY of each app — what it does, why it earns its
+        // pixel on the bar — so the reveal grid reads as a guided tour.
+        this._tooltip = new St.BoxLayout({
+            style_class: 'scatter-reveal-tooltip',
+            vertical: true,
+            opacity: 0,
+            visible: false,
+        });
+        this._tooltipTitle = new St.Label({
+            text: '',
+            style_class: 'scatter-reveal-tooltip-title',
+        });
+        this._tooltipStory = new St.Label({
+            text: '',
+            style_class: 'scatter-reveal-tooltip-story',
+        });
+        this._tooltip.add_child(this._tooltipTitle);
+        this._tooltip.add_child(this._tooltipStory);
+        Main.layoutManager.addChrome(this._tooltip, {
+            affectsInputRegion: false,
+        });
+    }
+
+    _showTooltip(tile, label, story) {
+        this._ensureTooltip();
+        if (!this._tooltip) return;
+        this._tooltipTitle.set_text(label || '');
+        this._tooltipStory.set_text(story || '');
+        this._tooltipStory.visible = !!(story && story.length);
+        const [tx, ty] = tile.get_transformed_position();
+        const [tw, th] = [tile.width, tile.height];
+        this._tooltip.visible = true;
+        // Force a layout pass so we know the tooltip's natural width.
+        const [, natWidth] = this._tooltip.get_preferred_width(-1);
+        const [, natHeight] = this._tooltip.get_preferred_height(natWidth);
+        this._tooltip.set_position(
+            tx + tw + 16,
+            ty + Math.floor((th - natHeight) / 2),
+        );
+        this._tooltip.ease({
+            opacity: 255,
+            duration: 220,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        });
+    }
+
+    _hideTooltip() {
+        if (!this._tooltip) return;
+        this._tooltip.ease({
+            opacity: 0,
+            duration: 160,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            onComplete: () => { if (this._tooltip) this._tooltip.visible = false; },
         });
     }
 
@@ -527,6 +959,7 @@ export default class ScatterBarExtension extends Extension {
         });
         this._desktopText.clutter_text.line_wrap = true;
         this._desktopText.clutter_text.line_wrap_mode = 2;
+        this._desktopText.clutter_text.set_ellipsize(0); // Pango.EllipsizeMode.NONE
 
         this._desktopClose = new St.Button({
             style_class: 'scatter-desktop-close',
@@ -556,27 +989,97 @@ export default class ScatterBarExtension extends Extension {
     }
 
     _showDesktop(text, meta) {
+        // Diagnostic: write to /tmp so we can verify the path is hit even when
+        // console output isn't reaching the journal.
+        try {
+            const f = Gio.File.new_for_path('/tmp/scatter-bubble-trace.log');
+            const stream = f.append_to(Gio.FileCreateFlags.NONE, null);
+            const line = `${new Date().toISOString()} len=${text ? text.length : 'NULL'} text="${(text||'').slice(0,80)}"\n`;
+            stream.write_all(new TextEncoder().encode(line), null);
+            stream.close(null);
+        } catch (_) { /* swallow */ }
+        // Clean rewrite: ask Pango directly how big the wrapped text is.
+        // No Clutter measurement-cache games. Sequence:
+        //   1. set_text on the label
+        //   2. configure clutter_text: ellipsize NONE, line_wrap ON, set_width = MAX_INNER
+        //   3. ask Pango layout for actual pixel extents of the wrapped text
+        //   4. resize clutter_text and bubble to those exact dimensions
+        //   5. position above bar at bowtie, animate scale-from-zero
         if (this._desktopHideTimeout) {
             GLib.source_remove(this._desktopHideTimeout);
             this._desktopHideTimeout = 0;
         }
-        this._desktopText.set_text(text);
+        const monitor = Main.layoutManager.primaryMonitor;
+        if (!monitor) return;
+
+        const PADDING_X = 28;        // CSS horizontal padding (~14×2)
+        const PADDING_CLOSE = 26;    // × button + row spacing
+        const MAX_W = Math.min(440, Math.floor(monitor.width * 0.40));
+        const MAX_INNER = MAX_W - PADDING_X - PADDING_CLOSE;
+
         const trail = this._formatTrail(meta || {});
         this._desktopTrail.set_text(trail);
         this._desktopTrail.visible = trail.length > 0;
+
+        // SMOKE TEST: red bubble for long messages, green for short. If the
+        // user never sees red, _showDesktop isn't being called at all.
+        if (text.length > 30) {
+            this._desktop.set_style('background-color: rgba(120, 20, 20, 0.95); border: 2px solid #ff6b6b;');
+        } else {
+            this._desktop.set_style(''); // revert to stylesheet
+        }
+
+        // Step 1+2: set text and wrap configuration.
+        this._desktopText.set_text(text);
+        const ct = this._desktopText.clutter_text;
+        ct.set_ellipsize(0);
+        ct.line_wrap = true;
+        ct.line_wrap_mode = 2;
+        ct.set_width(MAX_INNER);
+
+        // Step 3: Pango layout's actual rendered size after wrap. This is
+        // the source of truth — never lies, never caches stale.
+        const layout = ct.get_layout();
+        const [, logical] = layout.get_pixel_extents();
+        const wrappedTextW = Math.min(MAX_INNER, logical.width);
+        const wrappedTextH = logical.height;
+
+        // Step 4: shrink clutter_text to actual width so the actor doesn't
+        // claim wasted horizontal space for short messages.
+        ct.set_width(wrappedTextW + 2); // +2 px to avoid edge clipping
+        this._desktopText.set_width(wrappedTextW + 2);
+
+        // Bubble outer width = wrapped text + close button + padding.
+        const bubbleWidth = Math.max(120, wrappedTextW + PADDING_X + PADDING_CLOSE);
+        this._desktop.set_size(bubbleWidth, -1);
+
+        // Step 5: position. Bottom-left of bubble lands just above and to the
+        // right of the bowtie — that's the emergence anchor and animation pivot.
+        const [, bubbleHeight] = this._desktop.get_preferred_height(bubbleWidth);
+        const barTop = monitor.y + monitor.height - BAR_HEIGHT;
+        const bowtieRight = monitor.x + 56 + 64;
+        this._desktop.set_position(bowtieRight, barTop - bubbleHeight - 8);
+        this._desktop.set_pivot_point(0.0, 1.0);
+
+        const dbg = `scatter-bar:bubble len=${text.length} pango.w=${logical.width}`
+            + ` pango.h=${logical.height} bubble=${bubbleWidth}x${bubbleHeight}`;
+        log(dbg);
+        console.log(dbg);
+        console.error(dbg);
+
+        // Animate emergence — scale from a near-zero dot at the bowtie pivot.
         this._desktop.opacity = 0;
-        this._desktop.translation_y = MOTION_RISE_PX;
+        this._desktop.scale_x = 0.05;
+        this._desktop.scale_y = 0.05;
+        this._desktop.translation_y = 0;
         this._desktop.visible = true;
-        this._place();
         this._desktop.ease({
             opacity: 255,
-            translation_y: 0,
-            duration: MOTION_IN_MS,
-            mode: MOTION_EASE,
+            scale_x: 1.0,
+            scale_y: 1.0,
+            duration: 320,
+            mode: Clutter.AnimationMode.EASE_OUT_BACK,
         });
-        // No auto-fade. The bubble stays until × is clicked or the next
-        // reply replaces it. Sovereignty over your own thoughts includes
-        // sovereignty over when they disappear.
     }
 
     _hideResponse() {
@@ -591,22 +1094,24 @@ export default class ScatterBarExtension extends Extension {
 
     _hideDesktop() {
         if (!this._desktop || !this._desktop.visible) return;
-        // Falls back into the bar — same rise distance, same easing.
+        // Collapses back into the bowtie — scales down to the same point
+        // it emerged from, so dismissal mirrors emergence.
         this._desktop.ease({
             opacity: 0,
-            translation_y: MOTION_RISE_PX,
-            duration: MOTION_OUT_MS,
-            mode: MOTION_EASE,
+            scale_x: 0.05,
+            scale_y: 0.05,
+            duration: 220,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
             onComplete: () => { if (this._desktop) this._desktop.visible = false; },
         });
     }
 
-    // Provenance chip on the desktop bubble. Local replies are the invariant
-    // and carry no trail — silence is the success signal. Cloud replies carry
-    // a visible 'claude · egress on' mark so data leaves consciously.
+    // Provenance chip. Local replies are silent (the invariant). Cloud replies
+    // wear a plain-language mark so the user sees that data left this machine.
+    // No "egress" jargon. Per Data-Leaves-Consciously: the toggle is visible.
     _formatTrail(meta) {
         const route = meta.route || '';
-        if (route.startsWith('cloud:')) return 'claude · egress on';
+        if (route.startsWith('cloud:')) return '↗ claude · over the internet';
         return '';
     }
 
@@ -645,16 +1150,22 @@ export default class ScatterBarExtension extends Extension {
             this._bar.set_size(monitor.width, BAR_HEIGHT);
         }
         if (this._reveal) {
-            // Vertical column anchored above the bowtie — the column rises
-            // out of the face. Bar's left padding is 56px and the bowtie has
-            // min-width 64px, so its center sits at ~88px from monitor.x.
-            const orbSize = 96;       // diameter, must match stylesheet
-            const orbGap = 18;
+            // Grid: tiles laid out in vertical sub-columns of REVEAL_ROWS each,
+            // columns running left-to-right. Anchored to the bottom-left so
+            // the grid grows UP and to the RIGHT — never into the upper-left
+            // where Activities lives.
+            const orbSize = 96;       // tile size, must match stylesheet
+            const orbGap = 24;
             const padding = 16;
-            const revealWidth = orbSize + padding * 2;
-            const revealHeight = APPS.length * orbSize + (APPS.length - 1) * orbGap + padding * 2;
-            const bowtieCenterX = monitor.x + 56 + 32;  // bar padding + half bowtie width
-            const anchorX = Math.max(monitor.x + 8, bowtieCenterX - revealWidth / 2);
+            const REVEAL_ROWS = 5;
+            const cols = Math.ceil(APPS.length / REVEAL_ROWS);
+            const rowsInTallest = Math.min(APPS.length, REVEAL_ROWS);
+            const revealWidth = cols * orbSize + (cols - 1) * orbGap + padding * 2;
+            const revealHeight = rowsInTallest * orbSize + (rowsInTallest - 1) * orbGap + padding * 2;
+            // Anchor first column above the bowtie (bar's left padding + half
+            // bowtie width); subsequent columns extend rightward.
+            const bowtieCenterX = monitor.x + 56 + 32;
+            const anchorX = Math.max(monitor.x + 8, bowtieCenterX - orbSize / 2 - padding);
             this._reveal.set_size(revealWidth, revealHeight);
             this._reveal.set_position(
                 anchorX,
@@ -669,26 +1180,38 @@ export default class ScatterBarExtension extends Extension {
                 monitor.y + monitor.height - BAR_HEIGHT - 120,
             );
         }
-        if (this._desktop) {
-            // The bubble rises directly above the bar's >-< glyph — Scatter's
-            // mouth opening. Matches the bar's background and hairline so the
-            // bubble reads as the bar growing a thought, not a second widget.
-            const bubbleWidth = Math.min(560, Math.floor(monitor.width * 0.42));
-            this._desktop.set_size(bubbleWidth, -1);
-            const [, natHeight] = this._desktop.get_preferred_height(bubbleWidth);
-            const height = Math.max(56, natHeight);
-            const barTop = monitor.y + monitor.height - BAR_HEIGHT;
-            const anchorX = monitor.x + 56;
-            this._desktop.set_position(anchorX, barTop - height);
-        }
+        // Desktop bubble sizing/positioning lives entirely in _showDesktop —
+        // _place only handles bar/reveal/overlay. Desktop is recomputed every
+        // time text changes, so doing it here would just race the show path.
     }
 
     // ── Submit: classify → dispatch ──────────────────────────────────────
 
     _submit() {
-        const text = this._entry.get_text().trim();
+        const _entryText = this._entry.get_text();
+        // Use a spawned shell command — we know shell can write to disk.
+        // If THIS doesn't work, _submit isn't being called at all.
+        try {
+            GLib.spawn_command_line_async(
+                `/bin/sh -c 'echo "$(date -Iseconds) _submit text=${JSON.stringify(_entryText)}" >> /tmp/scatter-bubble-trace.log'`
+            );
+        } catch (_) {}
+        Main.notify('SCATTER BAR submit', `text="${_entryText}"`);
+        const text = _entryText.trim();
         if (!text) return;
         this._entry.set_text('');
+
+        // Pin / unpin — match before action verbs so "pin firefox" doesn't
+        // get caught by "open firefox"-style routing.
+        const pinMatch = text.match(PIN_VERB);
+        if (pinMatch) {
+            const verb = pinMatch[1].toLowerCase();
+            const name = pinMatch[2].trim();
+            if (verb === 'pin') this._pinApp(name);
+            else this._unpinApp(name);
+            this._flashGlyph();
+            return;
+        }
 
         // Session verbs (sleep) — no launch-verb required since "sleep"
         // is itself the verb.
@@ -703,6 +1226,7 @@ export default class ScatterBarExtension extends Extension {
 
         // Fallback: send to router. Reply comes back as text overlay for
         // now (Voice / Artifact / Desktop modalities staged for later).
+        this._lastPrompt = text;
         this._sendToRouter(text);
     }
 
@@ -722,7 +1246,291 @@ export default class ScatterBarExtension extends Extension {
         return false;
     }
 
+    // Pin: resolve <name> against system apps, write to pins file, rebuild
+    // the column. The column shows the new tile immediately.
+    _pinApp(name) {
+        const lower = name.toLowerCase();
+        const all = Gio.AppInfo.get_all();
+        const target = all.find(a => {
+            if (!a.should_show()) return false;
+            return (a.get_display_name() || '').toLowerCase().includes(lower)
+                || (a.get_id() || '').toLowerCase().includes(lower);
+        });
+        if (!target) {
+            this._showResponse('error',
+                `no system app matches "${name}". Flatpak apps need a session restart to be pinnable.`);
+            return;
+        }
+        const desktop_id = target.get_id();
+        const exec = target.get_commandline() || '';
+        const pins = _readPins();
+        if (pins.some(p => p.desktop_id === desktop_id)) {
+            this._showResponse('info', `${target.get_display_name()} is already pinned.`);
+            return;
+        }
+        pins.push({
+            label: target.get_display_name(),
+            exec,
+            desktop_id,
+        });
+        _writePins(pins);
+        APPS = _buildApps();
+        this._rebuildRevealLayer();
+        this._showResponse('ok', `pinned ${target.get_display_name()}`);
+    }
+
+    _unpinApp(name) {
+        const lower = name.toLowerCase();
+        const pins = _readPins();
+        const idx = pins.findIndex(p =>
+            (p.label || '').toLowerCase().includes(lower)
+            || (p.desktop_id || '').toLowerCase().includes(lower));
+        if (idx < 0) {
+            this._showResponse('error', `no pinned app matches "${name}".`);
+            return;
+        }
+        const removed = pins.splice(idx, 1)[0];
+        _writePins(pins);
+        APPS = _buildApps();
+        this._rebuildRevealLayer();
+        this._showResponse('ok', `unpinned ${removed.label}`);
+    }
+
+    _rebuildRevealLayer() {
+        const wasShown = this._revealShown;
+        if (this._reveal) {
+            Main.layoutManager.removeChrome(this._reveal);
+            this._reveal.destroy();
+            this._reveal = null;
+        }
+        this._revealItems = [];
+        this._revealShown = false;
+        this._buildRevealLayer();
+        this._place();
+        if (wasShown) this._showReveal();
+    }
+
+    // ── Scatter App Library ──────────────────────────────────────────────
+    // Full-screen modal listing every installed app in Scatter grammar.
+    // Replaces GNOME's Activities apps view, which carries Ubuntu's palette
+    // and breaks the "one canvas" thesis. Search at top, grid below, click
+    // to launch, right-click to pin.
+
+    _buildLibrary() {
+        // Outer scrim — black blur over the whole screen, click outside grid
+        // to dismiss. Tapping anywhere except a tile or the search field hides.
+        this._library = new St.BoxLayout({
+            name: 'scatterLibrary',
+            style_class: 'scatter-library',
+            vertical: true,
+            reactive: true,
+        });
+        this._library.visible = false;
+        this._library.opacity = 0;
+        this._library.connect('button-press-event', (actor, event) => {
+            // Dismiss only when the press lands on the scrim itself, not on
+            // the grid or the search.
+            if (event.get_source() === this._library) {
+                this._hideLibrary();
+                return Clutter.EVENT_STOP;
+            }
+            return Clutter.EVENT_PROPAGATE;
+        });
+
+        // Header: editorial wordmark + count + search.
+        const header = new St.BoxLayout({
+            style_class: 'scatter-library-header',
+            vertical: true,
+        });
+        this._libraryTitle = new St.Label({
+            text: 'all your software',
+            style_class: 'scatter-library-title',
+        });
+        this._librarySearch = new St.Entry({
+            hint_text: 'filter…',
+            can_focus: true,
+            track_hover: true,
+            style_class: 'scatter-library-search',
+        });
+        this._librarySearch.clutter_text.connect('text-changed', () => {
+            this._renderLibraryGrid();
+        });
+        this._librarySearch.clutter_text.connect('key-press-event', (actor, event) => {
+            const sym = event.get_key_symbol();
+            if (sym === Clutter.KEY_Escape) {
+                this._hideLibrary();
+                return Clutter.EVENT_STOP;
+            }
+            return Clutter.EVENT_PROPAGATE;
+        });
+        header.add_child(this._libraryTitle);
+        header.add_child(this._librarySearch);
+        this._library.add_child(header);
+
+        // Grid container — populated on show.
+        this._libraryGrid = new St.Widget({
+            style_class: 'scatter-library-grid',
+            layout_manager: new Clutter.GridLayout({
+                column_homogeneous: true,
+                row_homogeneous: false,
+                column_spacing: 18,
+                row_spacing: 18,
+            }),
+        });
+        const scroll = new St.ScrollView({
+            style_class: 'scatter-library-scroll',
+            x_expand: true,
+            y_expand: true,
+        });
+        scroll.set_policy(St.PolicyType.NEVER, St.PolicyType.AUTOMATIC);
+        const scrollChild = new St.BoxLayout({
+            vertical: true,
+            x_expand: true,
+        });
+        scrollChild.add_child(this._libraryGrid);
+        scroll.add_actor(scrollChild);
+        this._library.add_child(scroll);
+
+        Main.layoutManager.addChrome(this._library, {
+            affectsInputRegion: true,
+        });
+    }
+
+    _showLibrary() {
+        if (!this._library) return;
+        this._libraryShown = true;
+        this._librarySearch.set_text('');
+        this._renderLibraryGrid();
+        const monitor = Main.layoutManager.primaryMonitor;
+        if (monitor) {
+            this._library.set_position(monitor.x, monitor.y);
+            this._library.set_size(monitor.width, monitor.height);
+        }
+        this._library.visible = true;
+        this._library.ease({
+            opacity: 255,
+            duration: 280,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+        });
+        // Hand focus to search so the user can just type.
+        global.stage.set_key_focus(this._librarySearch.clutter_text);
+    }
+
+    _hideLibrary() {
+        if (!this._library || !this._libraryShown) return;
+        this._libraryShown = false;
+        this._library.ease({
+            opacity: 0,
+            duration: 200,
+            mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+            onComplete: () => { if (this._library) this._library.visible = false; },
+        });
+    }
+
+    _renderLibraryGrid() {
+        if (!this._libraryGrid) return;
+        this._libraryGrid.destroy_all_children();
+        const filter = (this._librarySearch.get_text() || '').toLowerCase().trim();
+        const apps = Gio.AppInfo.get_all()
+            .filter(a => a.should_show())
+            .filter(a => {
+                if (!filter) return true;
+                const name = (a.get_display_name() || '').toLowerCase();
+                const id = (a.get_id() || '').toLowerCase();
+                return name.includes(filter) || id.includes(filter);
+            })
+            .sort((a, b) =>
+                (a.get_display_name() || '').localeCompare(b.get_display_name() || ''));
+
+        const COLS = 6;
+        const layout = this._libraryGrid.layout_manager;
+        apps.forEach((info, i) => {
+            const row = Math.floor(i / COLS);
+            const col = i % COLS;
+            layout.attach(this._buildLibraryTile(info), col, row, 1, 1);
+        });
+        // Empty-state when nothing matches.
+        if (apps.length === 0) {
+            const empty = new St.Label({
+                text: filter ? `nothing matches "${filter}"` : 'no apps found',
+                style_class: 'scatter-library-empty',
+            });
+            layout.attach(empty, 0, 0, COLS, 1);
+        }
+    }
+
+    _buildLibraryTile(info) {
+        const tile = new St.Button({
+            style_class: 'scatter-library-tile',
+            can_focus: true,
+            track_hover: true,
+            reactive: true,
+        });
+        const inner = new St.BoxLayout({
+            vertical: true,
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER,
+        });
+
+        // Every app in the library wears Scatter grammar — vendor icons are
+        // dropped entirely. One register across the whole library: black tile,
+        // green letter, JB Mono. No 100 different brand colors competing.
+        const iconChild = this._makeScatterGlyphIcon(info.get_display_name() || info.get_id() || '?', 48);
+        inner.add_child(iconChild);
+
+        const label = new St.Label({
+            text: info.get_display_name() || info.get_id() || 'unknown',
+            style_class: 'scatter-library-tile-label',
+        });
+        label.clutter_text.set_line_wrap(true);
+        label.clutter_text.set_ellipsize(3);
+        inner.add_child(label);
+
+        tile.set_child(inner);
+
+        tile.connect('clicked', () => {
+            try {
+                info.launch([], null);
+            } catch (e) {
+                this._showResponse('error', `could not launch: ${e.message || e}`);
+            }
+            this._hideLibrary();
+        });
+        // Right-click → pin to bar.
+        tile.connect('button-press-event', (actor, event) => {
+            if (event.get_button() !== 3) return Clutter.EVENT_PROPAGATE;
+            const desktop_id = info.get_id();
+            const exec = info.get_commandline() || '';
+            const pins = _readPins();
+            if (pins.some(p => p.desktop_id === desktop_id)) {
+                this._showResponse('info', `${info.get_display_name()} is already pinned.`);
+            } else {
+                pins.push({
+                    label: info.get_display_name(),
+                    exec,
+                    desktop_id,
+                });
+                _writePins(pins);
+                APPS = _buildApps();
+                this._rebuildRevealLayer();
+                this._showResponse('ok', `pinned ${info.get_display_name()}`);
+            }
+            return Clutter.EVENT_STOP;
+        });
+
+        return tile;
+    }
+
     _launch(cmd) {
+        if (cmd === '__overview_apps') {
+            // Sentinel: open the Scatter-native app library instead of GNOME's.
+            this._showLibrary();
+            return;
+        }
+        if (cmd === '__history') {
+            this._showHistory();
+            return;
+        }
         try {
             GLib.spawn_command_line_async(cmd);
         } catch (e) {
@@ -768,17 +1576,18 @@ export default class ScatterBarExtension extends Extension {
             return GLib.SOURCE_REMOVE;
         });
 
+        // The reveal column persists across launches — orbs are residents,
+        // not torpedoes. Signature finishes, tile resets, column stays open
+        // until the bowtie is clicked again.
         try {
             signature(tile, launchOnce, () => {
                 GLib.source_remove(deadline);
                 resetTile();
-                this._hideReveal();
             });
         } catch (e) {
             log(`scatter-bar[${appSpec.label || 'app'}]: signature error ${e.message || e}`);
             launchOnce();
             resetTile();
-            this._hideReveal();
         }
     }
 
@@ -786,33 +1595,33 @@ export default class ScatterBarExtension extends Extension {
     // falls back to the generic scale-up. New apps drop in by adding a
     // method named _signatureFooBar and wiring it here.
     _signatureFor(appSpec) {
-        const label = (appSpec.label || '').toLowerCase();
-        // 'Scatter' (the browser, brand=scatter-browser) gets the wolf
-        // signature — stalk + sprint + sink-into-shadow. Distinct from the
-        // bowtie's bloom by way of the brand key.
-        if ((appSpec.brand || '') === 'scatter-browser')
-                                      return (t, l, d) => this._signatureScatterBrowser(t, l, d);
-        if (label === 'scatter')      return (t, l, d) => this._signatureScatter(t, l, d);
-        if (label === 'scatter code') return (t, l, d) => this._signatureScatterCode(t, l, d);
-        if (label === 'claude code')  return (t, l, d) => this._signatureClaudeCode(t, l, d);
-        if (label === 'files')        return (t, l, d) => this._signatureFiles(t, l, d);
-        if (label === 'terminal')     return (t, l, d) => this._signatureTerminal(t, l, d);
+        // Phase 1: every app uses the persistent press-pulse so orbs stay
+        // residents of the column. Per-app dramatic signatures (wolf sprint,
+        // Claude smile, terminal cut) come back as satellite clones that
+        // fly while the original tile stays put — Phase 2.
         return (t, l, d) => this._signatureDefault(t, l, d);
     }
 
-    // Generic signature — scale-up + fade. Calls launch at 100ms into the
-    // arc so the window can open while the tile is still dissolving.
+    // Generic signature — press-and-release. Tile breathes in, kicks the
+    // app on the inhale, then settles back. Stays visible the whole time.
     _signatureDefault(tile, launch, done) {
         tile.set_pivot_point(0.5, 0.5);
         tile.ease({
-            scale_x: 1.6,
-            scale_y: 1.6,
-            opacity: 0,
-            duration: 260,
+            scale_x: 1.18,
+            scale_y: 1.18,
+            duration: 160,
             mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-            onComplete: () => done(),
+            onComplete: () => {
+                tile.ease({
+                    scale_x: 1.0,
+                    scale_y: 1.0,
+                    duration: 240,
+                    mode: Clutter.AnimationMode.EASE_OUT_BACK,
+                    onComplete: () => done(),
+                });
+            },
         });
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 90, () => {
             launch();
             return GLib.SOURCE_REMOVE;
         });
@@ -1271,6 +2080,14 @@ export default class ScatterBarExtension extends Extension {
                     const data = JSON.parse(text);
                     const route = data.route || 'unknown';
                     const reply = data.response || '(empty reply)';
+                    try {
+                        const f = Gio.File.new_for_path('/tmp/scatter-bubble-trace.log');
+                        const s = f.append_to(Gio.FileCreateFlags.NONE, null);
+                        s.write_all(new TextEncoder().encode(
+                            `${new Date().toISOString()} reply route=${route} len=${reply.length}\n`
+                        ), null);
+                        s.close(null);
+                    } catch (_) {}
                     // Dispatch modality by route:
                     //   launch / system_query → small chrome overlay (confirmation)
                     //   prose replies          → Desktop (wallpaper as stage) + Voice
@@ -1287,6 +2104,16 @@ export default class ScatterBarExtension extends Extension {
                             ms: data.ms,
                         });
                         this._speak(reply);
+                    }
+                    // Persist every prose chat so the History view has a record.
+                    // Launch/shell routes are silent ops, not conversation.
+                    if (!route.startsWith('local:launch') && !route.startsWith('local:shell')) {
+                        _appendChat({
+                            ts: new Date().toISOString(),
+                            prompt: this._lastPrompt || '',
+                            reply,
+                            route,
+                        });
                     }
                 } catch (e) {
                     this._showResponse('error', `${e.message || e}`, 4000);

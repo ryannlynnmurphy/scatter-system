@@ -37,14 +37,17 @@
     border: none !important;
     box-shadow: none !important;
 }
+/* `>-<` text bowtie. Iconic — never replace this glyph. JB Mono renders it
+ * as three discrete cells; ligatures off so the dash doesn't fuse with the
+ * gt/lt characters into an arrow. Scatter green with a soft halo. */
 .scatter-bar-bowtie {
-    font-family: 'JetBrains Mono', 'Victor Mono', monospace;
+    font-family: "JetBrains Mono";
     font-size: 28px;
     font-weight: 600;
-    color: #f5f2ea;
+    color: #4ade80;
     letter-spacing: 0.06em;
     text-shadow: 0 0 12px rgba(74, 222, 128, 0.55),
-                 0 0 26px rgba(74, 222, 128, 0.25);
+                 0 0 26px rgba(74, 222, 128, 0.20);
     font-feature-settings: "liga" 0, "calt" 0, "dlig" 0, "clig" 0;
     font-variant-ligatures: none;
 }
@@ -56,10 +59,11 @@
                  0 0 30px rgba(74, 222, 128, 0.35);
 }
 
-/* The entry stretches across the bar. Placeholder is quiet; the caret is
- * the only bright element — it marks where the next word lands. */
+/* The entry stretches across the bar. Inter, paper-white, dim placeholder.
+ * The caret is the only bright element — it marks where the next word lands.
+ * This is the iconic register — never trade it for terminal-green hacker. */
 .scatter-bar-entry {
-    font-family: 'Inter', sans-serif;
+    font-family: "Inter";
     font-size: 22px;
     font-weight: 400;
     color: #f5f2ea;
@@ -79,46 +83,83 @@
     box-shadow: none;
 }
 
+/* Placeholder ("talk to scatter…") — dim grey, Inter, italics off. */
 .scatter-bar-entry StLabel {
     color: #5a5a5a;
     font-style: normal;
     font-weight: 400;
+    font-family: "Inter";
 }
 
-/* ── Reveal: column of orbs rising out of the bowtie ──────────────────── */
+/* The gear — settings, parked at the right gutter. Quiet by default; the
+ * bar wears no chrome until you reach for it. Pixel-art glyph in the same
+ * grammar as the orbs and the boot face. Click → gnome-control-center
+ * for now; this becomes the Scatter settings panel later. */
+.scatter-bar-gear {
+    min-width: 56px;
+    min-height: 56px;
+    background-color: transparent !important;
+    background-gradient-direction: none;
+    border: none !important;
+    border-radius: 2px;
+    padding: 6px 12px;
+    box-shadow: none !important;
+    opacity: 0.55;
+}
+.scatter-bar-gear:hover,
+.scatter-bar-gear:focus {
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    opacity: 1.0;
+}
+.scatter-bar-gear-icon {
+    icon-size: 40px;
+    color: #c8c8d0;
+}
 
-/* Transparent container; orbs animate in individually. */
+/* ── Reveal: 2-column grid rising out of the bowtie ───────────────────── */
+
+/* Transparent container; orbs animate in individually. The reveal is a
+ * horizontal box of vertical sub-columns — each column holds REVEAL_ROWS
+ * tiles. Grid grows up and to the right of the bowtie, NEVER into the
+ * upper-left of the screen (where Activities lives). */
 .scatter-reveal {
     background-color: transparent;
     border: none;
     padding: 16px;
-    spacing: 18px;
+    spacing: 24px;
+}
+.scatter-reveal-col {
+    background-color: transparent;
+    border: none;
+    spacing: 24px;
 }
 
-/* Each orb is a circle. Width / height match the JS set_size(96, 96) call
- * (the JS path is what actually enforces the size — CSS width was being
- * overridden by the inherited shell theme's .button rules). Background is
- * near-black with a per-app brand ring; the icon or glyph sits centered.
- * No labels — the orbs are pure. */
+/* Tile = 96px square with diffuse green ambient bleed. JS set_size enforces
+ * the 96 — CSS width alone gets overridden by the inherited shell theme. */
 .scatter-reveal-item {
-    background-color: rgba(12, 12, 12, 0.94) !important;
+    background-color: rgba(12, 12, 12, 0.82) !important;
     background-gradient-direction: none;
     background-image: none !important;
-    border: 1px solid rgba(255, 255, 255, 0.06) !important;
-    border-radius: 999px !important;
+    border: 1px solid rgba(74, 222, 128, 0.20) !important;
+    border-radius: 4px !important;
     width: 96px !important;
     height: 96px !important;
     min-width: 96px !important;
     min-height: 96px !important;
     padding: 0 !important;
     margin: 0 !important;
-    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+    box-shadow: 0 0 32px rgba(74, 222, 128, 0.20),
+                0 0 64px rgba(74, 222, 128, 0.08),
+                0 10px 26px rgba(0, 0, 0, 0.55);
 }
 .scatter-reveal-item:hover {
-    background-color: rgba(18, 18, 18, 1.0) !important;
-    border-color: rgba(255, 184, 0, 0.45) !important;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55),
-                0 0 0 2px rgba(255, 184, 0, 0.35);
+    background-color: rgba(18, 26, 20, 0.94) !important;
+    border-color: rgba(74, 222, 128, 0.60) !important;
+    box-shadow: 0 0 42px rgba(74, 222, 128, 0.55),
+                0 0 96px rgba(74, 222, 128, 0.22),
+                0 14px 32px rgba(0, 0, 0, 0.65);
 }
 
 .scatter-orb-inner {
@@ -129,8 +170,8 @@
 }
 
 .scatter-reveal-glyph {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 32px;
+    font-family: "JetBrains Mono";
+    font-size: 28px;
     font-weight: 500;
     color: #d8d8d8;
     text-align: center;
@@ -138,8 +179,186 @@
 }
 
 .scatter-orb-icon {
-    icon-size: 48px;
+    icon-size: 56px;
     color: #f5f2ea;
+}
+
+/* Tooltip — two-line placard right of the hovered tile. Title on top in
+ * Inter (paper-white), story line under it in dim grey. The story is the
+ * WHY of the app; the reveal grid then reads as a guided tour. */
+.scatter-reveal-tooltip {
+    background-color: rgba(10, 10, 10, 0.94);
+    border: 1px solid rgba(74, 222, 128, 0.40);
+    border-radius: 3px;
+    padding: 10px 14px;
+    spacing: 4px;
+    box-shadow: 0 0 20px rgba(74, 222, 128, 0.30);
+}
+.scatter-reveal-tooltip-title {
+    font-family: "Inter";
+    font-size: 14px;
+    font-weight: 500;
+    color: #f5f2ea;
+    letter-spacing: 0.02em;
+}
+.scatter-reveal-tooltip-story {
+    font-family: "Inter";
+    font-size: 12px;
+    font-weight: 400;
+    color: #a0a0a0;
+    letter-spacing: 0.01em;
+    max-width: 280px;
+}
+
+/* ── Scatter App Library ────────────────────────────────────────────── */
+/* Full-screen Scatter-grammar replacement for GNOME's Activities apps view.
+ * Black, green, paper-white. The library reads as a single canvas, not as
+ * an overlay glued on top of someone else's desktop. */
+.scatter-library {
+    background-color: rgba(8, 10, 9, 0.96);
+    padding: 80px 120px;
+}
+.scatter-library-header {
+    spacing: 16px;
+    padding-bottom: 32px;
+}
+.scatter-library-title {
+    font-family: "Inter";
+    font-size: 36px;
+    font-weight: 300;
+    color: #f5f2ea;
+    letter-spacing: 0.02em;
+}
+.scatter-library-search {
+    font-family: "JetBrains Mono";
+    font-size: 18px;
+    color: #f5f2ea;
+    background-color: rgba(12, 18, 14, 0.85);
+    border: 1px solid rgba(74, 222, 128, 0.35);
+    border-radius: 2px;
+    caret-color: #4ade80;
+    padding: 12px 16px;
+    box-shadow: 0 0 24px rgba(74, 222, 128, 0.18);
+}
+.scatter-library-search:focus {
+    border-color: rgba(74, 222, 128, 0.85);
+    box-shadow: 0 0 32px rgba(74, 222, 128, 0.35);
+}
+.scatter-library-search StLabel {
+    color: #5a5a5a;
+}
+.scatter-library-scroll {
+    background-color: transparent;
+}
+.scatter-library-grid {
+    background-color: transparent;
+    padding: 8px 0 64px 0;
+}
+.scatter-library-tile {
+    background-color: rgba(12, 14, 12, 0.55);
+    border: 1px solid rgba(74, 222, 128, 0.14);
+    border-radius: 2px;
+    padding: 16px 8px;
+    min-width: 120px;
+    min-height: 130px;
+    box-shadow: 0 0 18px rgba(74, 222, 128, 0.08);
+}
+.scatter-library-tile:hover,
+.scatter-library-tile:focus {
+    background-color: rgba(18, 26, 20, 0.92);
+    border-color: rgba(74, 222, 128, 0.7);
+    box-shadow: 0 0 28px rgba(74, 222, 128, 0.45);
+}
+.scatter-library-tile-icon {
+    icon-size: 48px;
+    padding-bottom: 8px;
+}
+.scatter-library-tile-glyph {
+    font-family: "JetBrains Mono";
+    font-size: 28px;
+    color: #4ade80;
+}
+.scatter-library-tile-label {
+    font-family: "Inter";
+    font-size: 12px;
+    font-weight: 400;
+    color: #c8c8c8;
+    text-align: center;
+    max-width: 110px;
+}
+/* ── History modal ──────────────────────────────────────────────────── */
+.scatter-history-list {
+    spacing: 8px;
+    padding: 8px 0 64px 0;
+}
+.scatter-history-heading {
+    font-family: "JetBrains Mono";
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    color: #4ade80;
+    text-transform: uppercase;
+    padding: 16px 0 8px 0;
+}
+.scatter-history-item {
+    background-color: rgba(12, 14, 12, 0.55);
+    border: 1px solid rgba(74, 222, 128, 0.14);
+    border-radius: 2px;
+    padding: 12px 16px;
+    box-shadow: 0 0 12px rgba(74, 222, 128, 0.06);
+}
+.scatter-history-item:hover,
+.scatter-history-item:focus {
+    background-color: rgba(18, 26, 20, 0.92);
+    border-color: rgba(74, 222, 128, 0.55);
+    box-shadow: 0 0 22px rgba(74, 222, 128, 0.30);
+}
+.scatter-history-meta {
+    font-family: "JetBrains Mono";
+    font-size: 10px;
+    color: #2f6b3d;
+    letter-spacing: 0.08em;
+    padding-bottom: 4px;
+}
+.scatter-history-prompt {
+    font-family: "JetBrains Mono";
+    font-size: 14px;
+    color: #f5f2ea;
+    letter-spacing: 0.02em;
+    line-height: 1.4;
+}
+.scatter-history-reply {
+    font-family: "Inter";
+    font-size: 13px;
+    color: #c8c8c8;
+    line-height: 1.5;
+    padding-top: 10px;
+}
+
+/* Generic Scatter app-glyph: dark tile + green initial letter.
+ * Used for every app in the library AND for pinned apps in the bar so
+ * the bar reads continuous with the library. ALL apps wear Scatter
+ * grammar, not their vendor's brand. */
+.scatter-app-glyph-tile {
+    background-color: rgba(10, 12, 10, 0.95);
+    border: 1.5px solid rgba(74, 222, 128, 0.45);
+    border-radius: 2px;
+    box-shadow: 0 0 14px rgba(74, 222, 128, 0.20);
+}
+.scatter-app-glyph {
+    font-family: "JetBrains Mono";
+    font-size: 22px;
+    font-weight: 700;
+    color: #4ade80;
+    letter-spacing: 0;
+}
+
+.scatter-library-empty {
+    font-family: "JetBrains Mono";
+    font-size: 14px;
+    color: #5a5a5a;
+    padding: 48px;
+    text-align: center;
 }
 
 /* ── Per-app brand tints — orb ring + glyph color ─────────────────────── */
@@ -263,7 +482,7 @@
 }
 
 .scatter-response-route {
-    font-family: 'JetBrains Mono', monospace;
+    font-family: "JetBrains Mono";
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.24em;
@@ -271,7 +490,7 @@
 }
 
 .scatter-response-text {
-    font-family: 'Inter', sans-serif;
+    font-family: "Inter";
     font-size: 16px;
     font-weight: 400;
     color: #f5f2ea;
@@ -284,51 +503,55 @@
  * background + hairline top, so it reads as the bar growing a thought —
  * not a separate floating widget. Same Inter typography as the entry. */
 
+/* Thought bubble — small, 8-bit, emerges from the bowtie's top-right.
+ * Same JB Mono register as the bar entry so "talk" and "Scatter's reply"
+ * read as one conversation, not two surfaces. Sharp green frame, soft
+ * green halo. The pivot is bottom-left so it scales out of the bowtie. */
 .scatter-desktop-bubble {
-    background-color: #0a0a0a;
-    border: none;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 0;
-    padding: 22px 28px 20px 56px;
-    spacing: 8px;
+    background-color: rgba(8, 10, 9, 0.95);
+    border: 2px solid rgba(74, 222, 128, 0.55);
+    border-radius: 2px;
+    padding: 10px 14px;
+    spacing: 2px;
+    box-shadow: 0 0 22px rgba(74, 222, 128, 0.35);
 }
 
 .scatter-desktop-row {
-    spacing: 16px;
+    spacing: 8px;
 }
 
 .scatter-desktop-text {
-    font-family: 'Inter', sans-serif;
-    font-size: 22px;
+    font-family: "JetBrains Mono";
+    font-size: 14px;
     font-weight: 400;
     color: #f5f2ea;
-    letter-spacing: -0.005em;
-    line-height: 1.45;
+    letter-spacing: 0.02em;
+    line-height: 1.4;
 }
 
 .scatter-desktop-close {
-    font-family: 'Inter', sans-serif;
-    font-size: 18px;
-    font-weight: 300;
-    color: #4a4a4a;
+    font-family: "JetBrains Mono";
+    font-size: 12px;
+    font-weight: 400;
+    color: #4ade80;
     background-color: transparent;
     background-gradient-direction: none;
     border: none;
     border-radius: 0;
-    padding: 0 4px;
-    min-width: 24px;
-    min-height: 24px;
+    padding: 0 2px;
+    min-width: 16px;
+    min-height: 16px;
 }
 .scatter-desktop-close:hover {
-    color: #c8c8c8;
+    color: #f5f2ea;
     background-color: transparent;
 }
 
 .scatter-desktop-trail {
-    font-family: 'Inter', sans-serif;
-    font-size: 11px;
-    font-weight: 500;
-    letter-spacing: 0.06em;
-    color: #5a5a5a;
-    padding-top: 6px;
+    font-family: "JetBrains Mono";
+    font-size: 9px;
+    font-weight: 400;
+    letter-spacing: 0.08em;
+    color: #2f6b3d;
+    padding-top: 2px;
 }
