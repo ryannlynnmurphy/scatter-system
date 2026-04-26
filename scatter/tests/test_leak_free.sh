@@ -25,7 +25,7 @@ ALLOWED["scatter/api.py"]="vetted external-call path, audit-logged"
 ALLOWED["scatter/server.py"]="localhost Ollama only (127.0.0.1:11434)"
 ALLOWED["scatter/launcher.py"]="localhost /health polling for the native window"
 ALLOWED["scatter/ai_local.py"]="localhost Ollama only, local whisper subprocess"
-ALLOWED["scatter/teaching.py"]="phase-one pedagogy, LEGACY pending retirement (task #28)"
+ALLOWED["scatter/tts.py"]="ElevenLabs voice synthesis, user-toggled, data-leaves-consciously"
 # scatter_core.py is NOT on this list — it must not import network modules.
 
 PATTERN='^[[:space:]]*(from[[:space:]]+(urllib|urllib\.[a-z]+)[[:space:]]+import|import[[:space:]]+(urllib|requests|httpx|socket)([[:space:]]|$))'
