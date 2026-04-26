@@ -79,3 +79,247 @@
 #panel:hover .panel-button.clock-display .clock {
   color: #d8dce2 !important;
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   CALENDAR DROPDOWN PALETTE: black / green / white only
+   Notifications (top-left of the dropdown) carry per-app brand colors by
+   default — too busy. Force every chrome surface in the dropdown to read
+   in Scatter's three-tone palette: ink-black, scatter-green, paper-white.
+   White is reserved for primary text and accents only — never large fills.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Outer popover */
+.popup-menu-content,
+.popup-menu-boxpointer .popup-menu-content {
+  background-color: rgba(8, 10, 9, 0.96) !important;
+  border: 1px solid rgba(74, 222, 128, 0.20) !important;
+  box-shadow: 0 0 36px rgba(74, 222, 128, 0.12) !important;
+}
+
+/* Date menu specifically */
+.datemenu-popover,
+.datemenu-popover .popup-menu-content {
+  background-color: rgba(8, 10, 9, 0.97) !important;
+  border-color: rgba(74, 222, 128, 0.22) !important;
+}
+
+/* Notification / message list — top-left zone of the calendar dropdown */
+.message-list,
+.message-list-sections,
+.message-list-section,
+.message-list-section-list {
+  background-color: transparent !important;
+  color: #c8c8c8 !important;
+}
+.message {
+  background-color: rgba(12, 14, 12, 0.85) !important;
+  border: 1px solid rgba(74, 222, 128, 0.18) !important;
+  border-radius: 2px !important;
+  box-shadow: none !important;
+  color: #c8c8c8 !important;
+}
+.message:hover,
+.message:focus {
+  background-color: rgba(18, 26, 20, 0.95) !important;
+  border-color: rgba(74, 222, 128, 0.55) !important;
+  box-shadow: 0 0 20px rgba(74, 222, 128, 0.25) !important;
+}
+.message .message-title,
+.message-title {
+  color: #f5f2ea !important;
+}
+.message .message-body,
+.message-body {
+  color: #c8c8c8 !important;
+}
+.message-list-controls,
+.message-list-clear-button {
+  color: #4ade80 !important;
+  background-color: transparent !important;
+  border: 1px solid rgba(74, 222, 128, 0.30) !important;
+  border-radius: 2px !important;
+}
+.message-list-controls:hover,
+.message-list-clear-button:hover {
+  color: #f5f2ea !important;
+  border-color: rgba(74, 222, 128, 0.7) !important;
+  background-color: rgba(74, 222, 128, 0.08) !important;
+}
+/* App-icon tint on notifications: collapse vendor color → scatter-green. */
+.message .message-source-icon,
+.message StIcon {
+  color: #4ade80 !important;
+}
+.message .message-icon,
+.message-icon {
+  color: #4ade80 !important;
+  background-color: transparent !important;
+}
+
+/* Calendar grid */
+.calendar {
+  background-color: transparent !important;
+  color: #c8c8c8 !important;
+}
+.calendar .calendar-month-label,
+.calendar .calendar-month-header .calendar-month-label {
+  color: #f5f2ea !important;
+  font-weight: 400 !important;
+}
+.calendar .calendar-day-heading,
+.calendar .calendar-day-base {
+  color: #5a5a5a !important;
+  background-color: transparent !important;
+  border: none !important;
+}
+.calendar .calendar-day-base:hover,
+.calendar .calendar-day-base:focus {
+  color: #f5f2ea !important;
+  background-color: rgba(74, 222, 128, 0.10) !important;
+  box-shadow: 0 0 12px rgba(74, 222, 128, 0.25) !important;
+}
+.calendar .calendar-today,
+.calendar .calendar-day-with-events.calendar-today {
+  color: #0a0a0a !important;
+  background-color: #4ade80 !important;
+  border-radius: 2px !important;
+  font-weight: 600 !important;
+}
+.calendar .calendar-other-month-day,
+.calendar .calendar-nonwork-day {
+  color: #3a3a3a !important;
+}
+.calendar .pager-button {
+  color: #c8c8c8 !important;
+  background-color: transparent !important;
+}
+.calendar .pager-button:hover {
+  color: #4ade80 !important;
+}
+
+/* Events / world clocks / weather sections — same constraint */
+.events-section-title,
+.events-section,
+.world-clocks-header,
+.weather-header,
+.datemenu-displays-section .heading {
+  color: #f5f2ea !important;
+  font-weight: 400 !important;
+}
+.events-list,
+.events-section-button,
+.world-clocks-button,
+.weather-button {
+  color: #c8c8c8 !important;
+  background-color: rgba(12, 14, 12, 0.7) !important;
+  border: 1px solid rgba(74, 222, 128, 0.15) !important;
+  border-radius: 2px !important;
+}
+.events-section-button:hover,
+.world-clocks-button:hover,
+.weather-button:hover {
+  border-color: rgba(74, 222, 128, 0.55) !important;
+  background-color: rgba(18, 26, 20, 0.92) !important;
+}
+.weather-forecast-icon,
+.world-clocks-city {
+  color: #4ade80 !important;
+}
+
+/* Do-not-disturb / quick-toggle row */
+.quick-settings,
+.quick-toggle,
+.quick-slider {
+  background-color: rgba(12, 14, 12, 0.85) !important;
+  color: #c8c8c8 !important;
+  border: 1px solid rgba(74, 222, 128, 0.18) !important;
+}
+.quick-toggle:checked,
+.quick-toggle.active {
+  background-color: rgba(74, 222, 128, 0.22) !important;
+  border-color: rgba(74, 222, 128, 0.7) !important;
+  color: #f5f2ea !important;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   QUICK SETTINGS / SYSTEM MENU (top-right): black + green only.
+   White-on-white was the worst offender. White is now reserved for primary
+   text only — never large fills, never backgrounds.
+   ══════════════════════════════════════════════════════════════════════ */
+.quick-settings-menu .popup-menu-content,
+.quick-settings,
+.quick-settings-grid,
+.system-menu-action,
+.aggregate-menu .popup-menu-content {
+  background-color: rgba(8, 10, 9, 0.97) !important;
+  border-color: rgba(74, 222, 128, 0.22) !important;
+  color: #c8c8c8 !important;
+}
+.quick-toggle,
+.quick-slider,
+.quick-toggle-menu,
+.system-menu-action StButton {
+  background-color: rgba(12, 14, 12, 0.85) !important;
+  background-image: none !important;
+  border: 1px solid rgba(74, 222, 128, 0.18) !important;
+  border-radius: 2px !important;
+  color: #c8c8c8 !important;
+  box-shadow: none !important;
+}
+.quick-toggle:hover,
+.quick-slider:hover,
+.system-menu-action StButton:hover {
+  background-color: rgba(18, 26, 20, 0.95) !important;
+  border-color: rgba(74, 222, 128, 0.55) !important;
+  color: #f5f2ea !important;
+  box-shadow: 0 0 14px rgba(74, 222, 128, 0.25) !important;
+}
+.quick-toggle:checked,
+.quick-toggle.active,
+.quick-slider:checked {
+  background-color: rgba(74, 222, 128, 0.22) !important;
+  border-color: rgba(74, 222, 128, 0.85) !important;
+  color: #f5f2ea !important;
+  box-shadow: 0 0 18px rgba(74, 222, 128, 0.45) !important;
+}
+.quick-toggle .quick-toggle-title,
+.quick-toggle .quick-toggle-subtitle,
+.quick-toggle StLabel,
+.quick-slider StLabel,
+.system-menu-action StLabel {
+  color: #c8c8c8 !important;
+}
+.quick-toggle:hover .quick-toggle-title,
+.quick-toggle:checked .quick-toggle-title {
+  color: #f5f2ea !important;
+}
+/* Slider track + handle */
+.quick-slider .slider {
+  background-color: rgba(12, 14, 12, 0.7) !important;
+  border: 1px solid rgba(74, 222, 128, 0.22) !important;
+}
+.quick-slider .slider-handle,
+.slider-handle {
+  background-color: #4ade80 !important;
+  border: 1px solid #4ade80 !important;
+}
+/* Volume / brightness icons */
+.quick-slider StIcon,
+.quick-toggle StIcon {
+  color: #4ade80 !important;
+}
+/* Power / suspend / lock / settings — bottom row */
+.system-menu-action {
+  background-color: transparent !important;
+  border: none !important;
+  color: #4ade80 !important;
+}
+.system-menu-action:hover {
+  background-color: rgba(74, 222, 128, 0.08) !important;
+  border-color: rgba(74, 222, 128, 0.45) !important;
+}
+/* Tray icons in the top-right when the menu is closed */
+.panel-button .system-status-icon,
+.aggregate-menu .indicator {
+  color: #c8c8c8 !important;
+}
