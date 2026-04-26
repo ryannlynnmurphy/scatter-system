@@ -31,7 +31,7 @@
  * bowtie. Reactive but not chromed — no pill, no border, no hover background.
  * The press is felt in motion. */
 .scatter-bar-glyph {
-    min-width: 88px;
+    min-width: 124px;
     min-height: 64px;
     background-color: transparent;
     background-gradient-direction: none;
@@ -137,7 +137,7 @@
 .scatter-reveal {
     background-color: transparent;
     border: none;
-    padding: 16px;
+    padding: 18px;
     spacing: 24px;
 }
 .scatter-reveal-col {
@@ -146,18 +146,19 @@
     spacing: 24px;
 }
 
-/* Tile = 96px square with diffuse green ambient bleed. JS set_size enforces
- * the 96 — CSS width alone gets overridden by the inherited shell theme. */
+/* Tile = 72px square with diffuse green ambient bleed. JS set_size enforces
+ * the 72 — CSS width alone gets overridden by the inherited shell theme.
+ * Sized down from 96 so a single 10-tile column fits on 1080p above the bowtie. */
 .scatter-reveal-item {
     background-color: rgba(12, 12, 12, 0.82) !important;
     background-gradient-direction: none;
     background-image: none !important;
     border: 1px solid rgba(74, 222, 128, 0.20) !important;
     border-radius: 4px !important;
-    width: 96px !important;
-    height: 96px !important;
-    min-width: 96px !important;
-    min-height: 96px !important;
+    width: 72px !important;
+    height: 72px !important;
+    min-width: 72px !important;
+    min-height: 72px !important;
     padding: 0 !important;
     margin: 0 !important;
     box-shadow: 0 0 32px rgba(74, 222, 128, 0.20),
@@ -173,15 +174,15 @@
 }
 
 .scatter-orb-inner {
-    width: 96px;
-    height: 96px;
-    min-width: 96px;
-    min-height: 96px;
+    width: 72px;
+    height: 72px;
+    min-width: 72px;
+    min-height: 72px;
 }
 
 .scatter-reveal-glyph {
     font-family: "JetBrains Mono";
-    font-size: 28px;
+    font-size: 22px;
     font-weight: 500;
     color: #d8d8d8;
     text-align: center;
@@ -189,7 +190,7 @@
 }
 
 .scatter-orb-icon {
-    icon-size: 56px;
+    icon-size: 40px;
     color: #f5f2ea;
 }
 

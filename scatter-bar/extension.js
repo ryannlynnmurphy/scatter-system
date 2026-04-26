@@ -247,12 +247,15 @@ export default class ScatterBarExtension extends Extension {
         this._revealShown = false;
         this._libraryShown = false;
 
-        this._buildBar();
+        // Build order = chrome z-order. The bowtie is the only thing the user
+        // must always be able to click (to dismiss the reveal), so add it LAST
+        // so it sits on top of the reveal grid and entry capsule.
         this._buildEntry();
         this._buildRevealLayer();
         this._buildResponseOverlay();
         this._buildDesktopSurface();
         this._buildLibrary();
+        this._buildBar();
         this._place();
 
         this._monitorsChangedId = Main.layoutManager.connect(
@@ -405,7 +408,7 @@ export default class ScatterBarExtension extends Extension {
             // Force the orb size via JS — CSS width/height alone gets eaten
             // by the inherited shell theme, which is what made these render
             // as narrow stadium pills instead of circles.
-            item.set_size(96, 96);
+            item.set_size(72, 72);
             // Brand tint — one CSS class per app, per stylesheet.
             if (app.brand) item.add_style_class_name(`scatter-orb-${app.brand}`);
 
@@ -415,7 +418,7 @@ export default class ScatterBarExtension extends Extension {
             // art (icon_path branch below).
             let iconChild = null;
             if (app.pinned) {
-                iconChild = this._makeScatterGlyphIcon(app.label, 48);
+                iconChild = this._makeScatterGlyphIcon(app.label, 36);
             }
             if (!iconChild && app.desktop_id) {
                 try {
@@ -425,7 +428,7 @@ export default class ScatterBarExtension extends Extension {
                         if (gicon) {
                             iconChild = new St.Icon({
                                 gicon,
-                                icon_size: 48,
+                                icon_size: 36,
                                 style_class: 'scatter-orb-icon',
                             });
                         }
@@ -440,7 +443,7 @@ export default class ScatterBarExtension extends Extension {
                     if (file.query_exists(null)) {
                         iconChild = new St.Icon({
                             gicon: new Gio.FileIcon({ file }),
-                            icon_size: 56,
+                            icon_size: 40,
                             style_class: 'scatter-orb-icon',
                         });
                     }
@@ -461,11 +464,11 @@ export default class ScatterBarExtension extends Extension {
             });
             item.set_child(inner);
 
-            // Initial state: collapsed at the bowtie's position, invisible.
-            // Animation will rise each orb up the column with a stagger so the
-            // bottom-most (closest to bowtie) emerges first.
-            item.set_pivot_point(0.5, 1.0);
-            item.translation_y = 80;
+            // Initial state: 40px above final position, invisible. Apps now
+            // descend from the top of the screen on reveal — top-of-column
+            // emerges first, giving a downward cascade in the apps domain.
+            item.set_pivot_point(0.5, 0.0);
+            item.translation_y = -40;
             item.opacity = 0;
             item._armed = false;
 
@@ -487,11 +490,12 @@ export default class ScatterBarExtension extends Extension {
         // Tooltip is created once (not recreated on rebuild) — see _ensureTooltip.
         this._ensureTooltip();
 
-        // Pack tiles into vertical sub-columns of REVEAL_ROWS each, then add
-        // each column to the horizontal reveal box. Within a column, tiles
-        // are laid bottom-up so source-order 0 sits closest to the bowtie.
-        // Source-order then runs: bottom-of-col-1 → top-of-col-1 → bottom-of-col-2 …
-        const REVEAL_ROWS = 5;  // max tiles per column before wrapping right
+        // Single column above the bowtie — apps stack straight up, never
+        // wrapping right. Two-column layout had column 2 floating directly
+        // above the entry capsule, which read as a stacked cluster in the
+        // lower-left. One column gives the bowtie / apps / entry three
+        // distinct zones: corner, ascending stack, rightward rail.
+        const REVEAL_ROWS = this._revealItems.length;
         for (let c = 0; c * REVEAL_ROWS < this._revealItems.length; c++) {
             const col = new St.BoxLayout({
                 style_class: 'scatter-reveal-col',
@@ -831,10 +835,11 @@ export default class ScatterBarExtension extends Extension {
         }
         if (this._entryFloat) {
             this._entryFloat.visible = true;
-            this._entryFloat.translation_x = -24;
+            this._entryFloat.translation_y = -16;
+            this._entryFloat.translation_x = 0;
             this._entryFloat.ease({
                 opacity: 255,
-                translation_x: 0,
+                translation_y: 0,
                 duration: 280,
                 mode: Clutter.AnimationMode.EASE_OUT_BACK,
             });
@@ -908,7 +913,7 @@ export default class ScatterBarExtension extends Extension {
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, i * 14, () => {
                 item.ease({
                     opacity: 0,
-                    translation_y: 80,
+                    translation_y: -40,
                     scale_x: 1.0,
                     scale_y: 1.0,
                     duration: 260,
@@ -924,7 +929,7 @@ export default class ScatterBarExtension extends Extension {
             }
             this._entryFloat.ease({
                 opacity: 0,
-                translation_x: -24,
+                translation_y: -16,
                 duration: 220,
                 mode: Clutter.AnimationMode.EASE_OUT_QUAD,
                 onComplete: () => {
@@ -1096,8 +1101,8 @@ export default class ScatterBarExtension extends Extension {
         // right of the bowtie — that's the emergence anchor and animation pivot.
         const [, bubbleHeight] = this._desktop.get_preferred_height(bubbleWidth);
         // Anchor to the floating face. Bowtie sits at (monitor.x + 24, …)
-        // with width 88 and a 24px corner gap from the bottom edge.
-        const FACE_W = 88;
+        // with width 124 and a 24px corner gap from the bottom edge.
+        const FACE_W = 124;
         const FACE_H = 64;
         const CORNER_PAD = 24;
         const faceX = monitor.x + CORNER_PAD;
@@ -1192,9 +1197,11 @@ export default class ScatterBarExtension extends Extension {
         // Floating face geometry: the bowtie sits in the bottom-left
         // corner with a margin off both edges. Apps ascend from its left;
         // the entry capsule extends from its right.
-        const FACE_W = 88;
+        // FACE_W = 124 holds `>-<` at 28px JB Mono without subpixel-clipping
+        // the right `<` (88px clipped on certain DPI configs).
+        const FACE_W = 124;
         const FACE_H = 64;
-        const CORNER_PAD = 24;
+        const CORNER_PAD = 40;
         const faceX = monitor.x + CORNER_PAD;
         const faceY = monitor.y + monitor.height - FACE_H - CORNER_PAD;
         const faceCenterY = faceY + FACE_H / 2;
@@ -1204,35 +1211,37 @@ export default class ScatterBarExtension extends Extension {
             this._bar.set_size(FACE_W, FACE_H);
         }
         if (this._entryFloat) {
-            // Slot the entry to the right of the bowtie, vertically centered
-            // on the face. It runs to the right edge of the screen minus a
-            // matching margin, so the entry never crowds anything else.
-            const ENTRY_H = 48;
-            const ENTRY_GAP = 12;
-            const entryX = faceX + FACE_W + ENTRY_GAP;
-            const entryY = Math.round(faceCenterY - ENTRY_H / 2);
-            const maxEntryW = monitor.width - (entryX - monitor.x) - CORNER_PAD;
-            const entryW = Math.min(560, Math.max(280, maxEntryW));
+            // Entry lives in its OWN domain — top-center Spotlight, not
+            // crowded against the bowtie. Sharing the bowtie's row + column
+            // (the previous "rail right of bowtie" approach) made the three
+            // surfaces functionally inseparable in the bottom-left.
+            const ENTRY_H = 56;
+            const entryW = Math.min(640, Math.max(360, monitor.width * 0.5));
+            const entryX = monitor.x + Math.round((monitor.width - entryW) / 2);
+            const entryY = monitor.y + Math.round(monitor.height * 0.18);
             this._entryFloat.set_position(entryX, entryY);
             this._entryFloat.set_size(entryW, ENTRY_H);
         }
         if (this._reveal) {
-            // Apps emerge from the LEFT side of the bowtie and travel UP.
-            // First column anchors at the bowtie's left edge; if the column
-            // would overflow the screen, additional columns wrap rightward
-            // (still ascending), never leftward into Activities territory.
-            const orbSize = 96;
+            // Apps live in their OWN domain — left edge, anchored to the
+            // TOP of the screen and descending. Previously rose UP from the
+            // bowtie, which crowded the bottom-left into one unusable
+            // cluster. Now there's a huge vertical gulf between the bottom
+            // of the apps column and the top of the bowtie.
+            const orbSize = 72;
             const orbGap = 24;
-            const padding = 16;
-            const REVEAL_ROWS = 5;  // must match _buildRevealLayer
+            const padding = 18;
+            const REVEAL_ROWS = this._revealItems.length;  // single column
             const cols = Math.max(1, Math.ceil(APPS.length / REVEAL_ROWS));
             const rowsInTallest = Math.min(APPS.length, REVEAL_ROWS);
             const revealWidth = cols * orbSize + (cols - 1) * orbGap + padding * 2;
             const revealHeight = rowsInTallest * orbSize + (rowsInTallest - 1) * orbGap + padding * 2;
             this._reveal.set_size(revealWidth, revealHeight);
+            // Anchored 60px from screen top, left edge with corner pad.
+            // Bottom of column ends well above the bowtie row.
             this._reveal.set_position(
                 faceX,
-                faceY - revealHeight + 4,
+                monitor.y + 60,
             );
         }
         if (this._overlay) {
