@@ -464,11 +464,11 @@ export default class ScatterBarExtension extends Extension {
             });
             item.set_child(inner);
 
-            // Initial state: 40px above final position, invisible. Apps now
-            // descend from the top of the screen on reveal — top-of-column
-            // emerges first, giving a downward cascade in the apps domain.
-            item.set_pivot_point(0.5, 0.0);
-            item.translation_y = -40;
+            // Initial state: 40px below final position, invisible. Apps
+            // ascend from the face — bottom-of-column emerges first, the
+            // column pours upward out of the bowtie's side.
+            item.set_pivot_point(0.5, 1.0);
+            item.translation_y = 40;
             item.opacity = 0;
             item._armed = false;
 
@@ -835,11 +835,11 @@ export default class ScatterBarExtension extends Extension {
         }
         if (this._entryFloat) {
             this._entryFloat.visible = true;
-            this._entryFloat.translation_y = -16;
-            this._entryFloat.translation_x = 0;
+            this._entryFloat.translation_y = 0;
+            this._entryFloat.translation_x = -16;
             this._entryFloat.ease({
                 opacity: 255,
-                translation_y: 0,
+                translation_x: 0,
                 duration: 280,
                 mode: Clutter.AnimationMode.EASE_OUT_BACK,
             });
@@ -913,7 +913,7 @@ export default class ScatterBarExtension extends Extension {
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, i * 14, () => {
                 item.ease({
                     opacity: 0,
-                    translation_y: -40,
+                    translation_y: 40,
                     scale_x: 1.0,
                     scale_y: 1.0,
                     duration: 260,
@@ -929,7 +929,7 @@ export default class ScatterBarExtension extends Extension {
             }
             this._entryFloat.ease({
                 opacity: 0,
-                translation_y: -16,
+                translation_x: -16,
                 duration: 220,
                 mode: Clutter.AnimationMode.EASE_OUT_QUAD,
                 onComplete: () => {
@@ -1211,23 +1211,27 @@ export default class ScatterBarExtension extends Extension {
             this._bar.set_size(FACE_W, FACE_H);
         }
         if (this._entryFloat) {
-            // Entry lives in its OWN domain — top-center Spotlight, not
-            // crowded against the bowtie. Sharing the bowtie's row + column
-            // (the previous "rail right of bowtie" approach) made the three
-            // surfaces functionally inseparable in the bottom-left.
+            // Entry capsule shares the bowtie's row and extends to its right.
+            // Sits at the bottom of the screen, vertically centered against
+            // the face. Width fills the rest of the bottom edge minus a
+            // generous right margin.
             const ENTRY_H = 56;
-            const entryW = Math.min(640, Math.max(360, monitor.width * 0.5));
-            const entryX = monitor.x + Math.round((monitor.width - entryW) / 2);
-            const entryY = monitor.y + Math.round(monitor.height * 0.18);
+            const ENTRY_GAP = 20;
+            const RIGHT_PAD = CORNER_PAD;
+            const entryX = faceX + FACE_W + ENTRY_GAP;
+            const entryW = Math.max(
+                360,
+                Math.min(720, monitor.x + monitor.width - RIGHT_PAD - entryX),
+            );
+            const entryY = faceY + Math.round((FACE_H - ENTRY_H) / 2);
             this._entryFloat.set_position(entryX, entryY);
             this._entryFloat.set_size(entryW, ENTRY_H);
         }
         if (this._reveal) {
-            // Apps live in their OWN domain — left edge, anchored to the
-            // TOP of the screen and descending. Previously rose UP from the
-            // bowtie, which crowded the bottom-left into one unusable
-            // cluster. Now there's a huge vertical gulf between the bottom
-            // of the apps column and the top of the bowtie.
+            // Apps ascend from the bowtie — column anchored to the face's
+            // left edge, rising straight up. Bottom of the column sits one
+            // gap above the top of the face so the cascade reads as pouring
+            // out of the side of Scatter's face.
             const orbSize = 72;
             const orbGap = 24;
             const padding = 18;
@@ -1237,12 +1241,10 @@ export default class ScatterBarExtension extends Extension {
             const revealWidth = cols * orbSize + (cols - 1) * orbGap + padding * 2;
             const revealHeight = rowsInTallest * orbSize + (rowsInTallest - 1) * orbGap + padding * 2;
             this._reveal.set_size(revealWidth, revealHeight);
-            // Anchored 60px from screen top, left edge with corner pad.
-            // Bottom of column ends well above the bowtie row.
-            this._reveal.set_position(
-                faceX,
-                monitor.y + 60,
-            );
+            const APPS_GAP = 16;
+            const revealX = faceX + Math.round((FACE_W - revealWidth) / 2);
+            const revealY = Math.max(monitor.y + 24, faceY - APPS_GAP - revealHeight);
+            this._reveal.set_position(revealX, revealY);
         }
         if (this._overlay) {
             const overlayWidth = Math.min(720, monitor.width - 96);
