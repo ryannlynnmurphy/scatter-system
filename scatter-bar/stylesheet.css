@@ -1,18 +1,28 @@
-/* Scatter Bar — the still floor of the OS.
+/* Scatter Bar — the floating face.
  *
- * One row, full-width. >-< at the left, entry stretching right, nothing else.
- * The bar wears no chrome; it is the chrome. A hairline at the top. The
- * cursor is the only focus signal a human needs.
+ * No strip, no chrome. Just `>-<` perched in the bottom-left. Click it and
+ * apps ascend on the left, the talk-to-scatter capsule slides out to the
+ * right. The cursor is the only focus signal a human needs.
  */
 
 /* ── Bar ──────────────────────────────────────────────────────────────── */
 
 .scatter-bar {
-    background-color: #0a0a0a;
+    background-color: transparent;
     border: none;
-    border-top: 1px solid rgba(255, 255, 255, 0.06);
-    padding: 0 56px;
-    spacing: 24px;
+    padding: 0;
+    spacing: 0;
+}
+
+/* The floating entry capsule, summoned to the right of the bowtie. Quiet
+ * dark pill that lets the wallpaper read through softly. The caret is the
+ * only bright thing inside it. */
+.scatter-entry-float {
+    background-color: rgba(10, 10, 10, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 24px;
+    padding: 0 20px;
+    spacing: 0;
 }
 
 /* The bowtie — Scatter's face. The left gutter of the bar carries it

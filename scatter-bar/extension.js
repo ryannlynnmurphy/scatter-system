@@ -248,6 +248,7 @@ export default class ScatterBarExtension extends Extension {
         this._libraryShown = false;
 
         this._buildBar();
+        this._buildEntry();
         this._buildRevealLayer();
         this._buildResponseOverlay();
         this._buildDesktopSurface();
@@ -268,7 +269,7 @@ export default class ScatterBarExtension extends Extension {
             this._hideRevealTimeout = 0;
         }
         if (this._bar) { Main.layoutManager.removeChrome(this._bar); this._bar.destroy(); this._bar = null; }
-        this._gear = null;
+        if (this._entryFloat) { Main.layoutManager.removeChrome(this._entryFloat); this._entryFloat.destroy(); this._entryFloat = null; }
         if (this._reveal) { Main.layoutManager.removeChrome(this._reveal); this._reveal.destroy(); this._reveal = null; }
         if (this._tooltip) { Main.layoutManager.removeChrome(this._tooltip); this._tooltip.destroy(); this._tooltip = null; }
         if (this._overlay) { Main.layoutManager.removeChrome(this._overlay); this._overlay.destroy(); this._overlay = null; }
@@ -283,9 +284,9 @@ export default class ScatterBarExtension extends Extension {
     // ── Bar: the literal bottom panel ────────────────────────────────────
 
     _buildBar() {
-        // One row, full-width. >-< at the left, entry stretching right.
-        // No wordmark, no handle, no apps zone. The bar is the still center
-        // of the OS; it carries one verb (talk) and wears no decoration.
+        // The floating face. Just the bowtie, anchored bottom-left. No strip,
+        // no entry, no gear — those are summoned. The bowtie is the only
+        // permanent chrome Scatter keeps on screen.
         this._bar = new St.BoxLayout({
             name: 'scatterBar',
             style_class: 'scatter-bar',
@@ -294,9 +295,6 @@ export default class ScatterBarExtension extends Extension {
             track_hover: false,
         });
 
-        // The bowtie — Scatter's face. Plain `>-<` text. This is the
-        // iconic bar; never replace this glyph. CSS kills ligatures so the
-        // dash doesn't fuse with the gt/lt into an arrow.
         const bowtieLabel = new St.Label({
             text: '>-<',
             style_class: 'scatter-bar-bowtie',
@@ -330,6 +328,27 @@ export default class ScatterBarExtension extends Extension {
         });
         this._bar.add_child(this._glyph);
 
+        Main.layoutManager.addChrome(this._bar, {
+            affectsStruts: false,
+            trackFullscreen: true,
+            affectsInputRegion: true,
+        });
+    }
+
+    // ── Entry capsule: summoned by bowtie, slides out to the right ─────
+    _buildEntry() {
+        // Floating talk-to-scatter entry. The bowtie's `-<` arm points at
+        // it; it extends rightward from the right side of the bowtie when
+        // the face opens, retracts when the face closes.
+        this._entryFloat = new St.BoxLayout({
+            name: 'scatterEntryFloat',
+            style_class: 'scatter-entry-float',
+            vertical: false,
+            reactive: true,
+            visible: false,
+            opacity: 0,
+        });
+
         this._entry = new St.Entry({
             hint_text: 'talk to scatter…',
             can_focus: true,
@@ -339,28 +358,17 @@ export default class ScatterBarExtension extends Extension {
             y_align: Clutter.ActorAlign.CENTER,
         });
         this._entry.clutter_text.connect('activate', () => this._submit());
-        this._bar.add_child(this._entry);
-
-        // Gear at the right gutter. Quiet pixel-art glyph in the boot-face
-        // grammar; opens system settings (Scatter settings panel later).
-        const gearFile = Gio.File.new_for_path(_icon('gear'));
-        const gearIcon = new St.Icon({
-            gicon: new Gio.FileIcon({ file: gearFile }),
-            style_class: 'scatter-bar-gear-icon',
+        this._entry.clutter_text.connect('key-press-event', (_a, ev) => {
+            if (ev.get_key_symbol() === Clutter.KEY_Escape) {
+                this._hideReveal();
+                return Clutter.EVENT_STOP;
+            }
+            return Clutter.EVENT_PROPAGATE;
         });
-        this._gear = new St.Button({
-            style_class: 'scatter-bar-gear',
-            y_align: Clutter.ActorAlign.CENTER,
-            can_focus: true,
-            track_hover: true,
-            reactive: true,
-            child: gearIcon,
-        });
-        this._gear.connect('clicked', () => this._launch('gnome-control-center'));
-        this._bar.add_child(this._gear);
+        this._entryFloat.add_child(this._entry);
 
-        Main.layoutManager.addChrome(this._bar, {
-            affectsStruts: true,
+        Main.layoutManager.addChrome(this._entryFloat, {
+            affectsStruts: false,
             trackFullscreen: true,
             affectsInputRegion: true,
         });
@@ -632,7 +640,7 @@ export default class ScatterBarExtension extends Extension {
             x_expand: true,
             style_class: 'scatter-history-list',
         });
-        scroll.add_actor(this._historyList);
+        scroll.set_child(this._historyList);
         this._history.add_child(scroll);
 
         Main.layoutManager.addChrome(this._history, {
@@ -812,13 +820,27 @@ export default class ScatterBarExtension extends Extension {
     }
 
     _showReveal() {
-        // Bowtie click → arm all tiles. Container becomes visible (it's
-        // hidden at rest), then each orb rises with a small stagger.
+        // Bowtie click → face opens. Apps rise on the left in a staggered
+        // column; the entry capsule slides out to the right and takes
+        // focus so the user can speak immediately.
         this._cancelHideTimer();
         this._revealShown = true;
         if (this._reveal) {
             this._reveal.visible = true;
             this._reveal.opacity = 255;
+        }
+        if (this._entryFloat) {
+            this._entryFloat.visible = true;
+            this._entryFloat.translation_x = -24;
+            this._entryFloat.ease({
+                opacity: 255,
+                translation_x: 0,
+                duration: 280,
+                mode: Clutter.AnimationMode.EASE_OUT_BACK,
+            });
+            if (this._entry) {
+                this._entry.grab_key_focus();
+            }
         }
         this._revealItems.forEach((item, i) => {
             if (item._armed) return;
@@ -895,6 +917,23 @@ export default class ScatterBarExtension extends Extension {
                 return GLib.SOURCE_REMOVE;
             });
         });
+        if (this._entryFloat) {
+            if (this._entry) {
+                this._entry.set_text('');
+                if (global.stage) global.stage.set_key_focus(null);
+            }
+            this._entryFloat.ease({
+                opacity: 0,
+                translation_x: -24,
+                duration: 220,
+                mode: Clutter.AnimationMode.EASE_OUT_QUAD,
+                onComplete: () => {
+                    if (this._entryFloat && !this._revealShown) {
+                        this._entryFloat.visible = false;
+                    }
+                },
+            });
+        }
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, totalMs, () => {
             if (this._reveal && !this._revealShown) {
                 this._reveal.visible = false;
@@ -1056,9 +1095,14 @@ export default class ScatterBarExtension extends Extension {
         // Step 5: position. Bottom-left of bubble lands just above and to the
         // right of the bowtie — that's the emergence anchor and animation pivot.
         const [, bubbleHeight] = this._desktop.get_preferred_height(bubbleWidth);
-        const barTop = monitor.y + monitor.height - BAR_HEIGHT;
-        const bowtieRight = monitor.x + 56 + 64;
-        this._desktop.set_position(bowtieRight, barTop - bubbleHeight - 8);
+        // Anchor to the floating face. Bowtie sits at (monitor.x + 24, …)
+        // with width 88 and a 24px corner gap from the bottom edge.
+        const FACE_W = 88;
+        const FACE_H = 64;
+        const CORNER_PAD = 24;
+        const faceX = monitor.x + CORNER_PAD;
+        const faceTop = monitor.y + monitor.height - FACE_H - CORNER_PAD;
+        this._desktop.set_position(faceX + FACE_W + 12, faceTop - bubbleHeight - 8);
         this._desktop.set_pivot_point(0.0, 1.0);
 
         const dbg = `scatter-bar:bubble len=${text.length} pango.w=${logical.width}`
@@ -1145,31 +1189,50 @@ export default class ScatterBarExtension extends Extension {
         const monitor = Main.layoutManager.primaryMonitor;
         if (!monitor) return;
 
+        // Floating face geometry: the bowtie sits in the bottom-left
+        // corner with a margin off both edges. Apps ascend from its left;
+        // the entry capsule extends from its right.
+        const FACE_W = 88;
+        const FACE_H = 64;
+        const CORNER_PAD = 24;
+        const faceX = monitor.x + CORNER_PAD;
+        const faceY = monitor.y + monitor.height - FACE_H - CORNER_PAD;
+        const faceCenterY = faceY + FACE_H / 2;
+
         if (this._bar) {
-            this._bar.set_position(monitor.x, monitor.y + monitor.height - BAR_HEIGHT);
-            this._bar.set_size(monitor.width, BAR_HEIGHT);
+            this._bar.set_position(faceX, faceY);
+            this._bar.set_size(FACE_W, FACE_H);
+        }
+        if (this._entryFloat) {
+            // Slot the entry to the right of the bowtie, vertically centered
+            // on the face. It runs to the right edge of the screen minus a
+            // matching margin, so the entry never crowds anything else.
+            const ENTRY_H = 48;
+            const ENTRY_GAP = 12;
+            const entryX = faceX + FACE_W + ENTRY_GAP;
+            const entryY = Math.round(faceCenterY - ENTRY_H / 2);
+            const maxEntryW = monitor.width - (entryX - monitor.x) - CORNER_PAD;
+            const entryW = Math.min(560, Math.max(280, maxEntryW));
+            this._entryFloat.set_position(entryX, entryY);
+            this._entryFloat.set_size(entryW, ENTRY_H);
         }
         if (this._reveal) {
-            // Grid: tiles laid out in vertical sub-columns of REVEAL_ROWS each,
-            // columns running left-to-right. Anchored to the bottom-left so
-            // the grid grows UP and to the RIGHT — never into the upper-left
-            // where Activities lives.
-            const orbSize = 96;       // tile size, must match stylesheet
+            // Apps emerge from the LEFT side of the bowtie and travel UP.
+            // First column anchors at the bowtie's left edge; if the column
+            // would overflow the screen, additional columns wrap rightward
+            // (still ascending), never leftward into Activities territory.
+            const orbSize = 96;
             const orbGap = 24;
             const padding = 16;
-            const REVEAL_ROWS = 5;
-            const cols = Math.ceil(APPS.length / REVEAL_ROWS);
+            const REVEAL_ROWS = 5;  // must match _buildRevealLayer
+            const cols = Math.max(1, Math.ceil(APPS.length / REVEAL_ROWS));
             const rowsInTallest = Math.min(APPS.length, REVEAL_ROWS);
             const revealWidth = cols * orbSize + (cols - 1) * orbGap + padding * 2;
             const revealHeight = rowsInTallest * orbSize + (rowsInTallest - 1) * orbGap + padding * 2;
-            // Anchor first column above the bowtie (bar's left padding + half
-            // bowtie width); subsequent columns extend rightward.
-            const bowtieCenterX = monitor.x + 56 + 32;
-            const anchorX = Math.max(monitor.x + 8, bowtieCenterX - orbSize / 2 - padding);
             this._reveal.set_size(revealWidth, revealHeight);
             this._reveal.set_position(
-                anchorX,
-                monitor.y + monitor.height - BAR_HEIGHT - revealHeight + 12,
+                faceX,
+                faceY - revealHeight + 4,
             );
         }
         if (this._overlay) {
@@ -1177,7 +1240,7 @@ export default class ScatterBarExtension extends Extension {
             this._overlay.set_size(overlayWidth, -1);
             this._overlay.set_position(
                 monitor.x + (monitor.width - overlayWidth) / 2,
-                monitor.y + monitor.height - BAR_HEIGHT - 120,
+                faceY - 120,
             );
         }
         // Desktop bubble sizing/positioning lives entirely in _showDesktop —
@@ -1388,7 +1451,7 @@ export default class ScatterBarExtension extends Extension {
             x_expand: true,
         });
         scrollChild.add_child(this._libraryGrid);
-        scroll.add_actor(scrollChild);
+        scroll.set_child(scrollChild);
         this._library.add_child(scroll);
 
         Main.layoutManager.addChrome(this._library, {
