@@ -147,24 +147,34 @@ fi
 
 # ── 6. Phone-side cluster.json ──────────────────────────────────────────
 # The phone's manifest prefers the home tailnet workers (when reachable)
-# and falls back to its own Ollama. Edit the LAPTOP_TAILNET_NAME below
-# after `tailscale status` shows your tailnet (e.g. "scatter-lan.ts.net").
+# and falls back to its own Ollama. Tailnet suffix can be supplied via
+# SCATTER_TAILNET_SUFFIX env var (e.g. tail33bb49.ts.net) to skip the
+# manual EXAMPLE.ts.net edit. If not provided, leaves the placeholder
+# and prints a reminder at the end.
 
 mkdir -p ~/.scatter
 
+TAILNET="${SCATTER_TAILNET_SUFFIX:-EXAMPLE.ts.net}"
+if [ "$TAILNET" = "EXAMPLE.ts.net" ]; then
+  warn "SCATTER_TAILNET_SUFFIX not set — phone cluster.json will need manual edit."
+  warn "find your suffix on the laptop: tailscale status --json | grep MagicDNSSuffix"
+else
+  say "tailnet suffix: $TAILNET"
+fi
+
 if [ ! -f ~/.scatter/cluster.json ]; then
-  say "writing phone cluster.json (edit the .ts.net name to match your tailnet)"
-  cat > ~/.scatter/cluster.json <<'JSON'
+  say "writing phone cluster.json"
+  cat > ~/.scatter/cluster.json <<JSON
 {
   "head_node": "localhost",
-  "_note": "edit endpoints below: replace EXAMPLE.ts.net with your tailnet's MagicDNS suffix from `tailscale status`",
+  "_note": "tailnet workers; if hosts are unreachable, falls back to local pixel ollama",
   "workers": [
-    {"host": "pi-1",      "endpoint": "http://pi-1.EXAMPLE.ts.net:11434",   "model": "llama3.2:3b", "capabilities": ["inference"], "role": "primary"},
-    {"host": "pi-2",      "endpoint": "http://pi-2.EXAMPLE.ts.net:11434",   "model": "llama3.2:3b", "capabilities": ["inference"], "role": "primary"},
-    {"host": "pi-3",      "endpoint": "http://pi-3.EXAMPLE.ts.net:11434",   "model": "llama3.2:3b", "capabilities": ["inference"], "role": "primary"},
-    {"host": "pi-4",      "endpoint": "http://pi-4.EXAMPLE.ts.net:11434",   "model": "llama3.2:3b", "capabilities": ["inference"], "role": "primary"},
-    {"host": "laptop",    "endpoint": "http://laptop.EXAMPLE.ts.net:11434", "model": "llama3.2:3b", "capabilities": ["inference"], "role": "primary"},
-    {"host": "pixel-self","endpoint": "http://127.0.0.1:11434",             "model": "llama3.2:3b", "capabilities": ["inference"], "role": "fallback"}
+    {"host": "pi-1",      "endpoint": "http://pi-1.${TAILNET}:11434",   "model": "llama3.2:3b", "capabilities": ["inference"], "role": "primary"},
+    {"host": "pi-2",      "endpoint": "http://pi-2.${TAILNET}:11434",   "model": "llama3.2:3b", "capabilities": ["inference"], "role": "primary"},
+    {"host": "pi-3",      "endpoint": "http://pi-3.${TAILNET}:11434",   "model": "llama3.2:3b", "capabilities": ["inference"], "role": "primary"},
+    {"host": "pi-4",      "endpoint": "http://pi-4.${TAILNET}:11434",   "model": "llama3.2:3b", "capabilities": ["inference"], "role": "primary"},
+    {"host": "scatter",   "endpoint": "http://scatter.${TAILNET}:11434", "model": "llama3.2:3b", "capabilities": ["inference"], "role": "primary"},
+    {"host": "pixel-self","endpoint": "http://127.0.0.1:11434",          "model": "llama3.2:3b", "capabilities": ["inference"], "role": "fallback"}
   ]
 }
 JSON
