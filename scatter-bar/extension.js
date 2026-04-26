@@ -1232,18 +1232,57 @@ export default class ScatterBarExtension extends Extension {
             // left edge, rising straight up. Bottom of the column sits one
             // gap above the top of the face so the cascade reads as pouring
             // out of the side of Scatter's face.
-            const orbSize = 72;
-            const orbGap = 24;
+            //
+            // Legibility-within-bounds rule: the column MUST fit between
+            // monitor top and the face. If the natural 72px orb size would
+            // overflow (10 apps on 1080p was clipping the bottom orb against
+            // the face), scale orb size + gap down proportionally so every
+            // tile is fully on-screen and intact.
             const padding = 18;
-            const REVEAL_ROWS = this._revealItems.length;  // single column
-            const cols = Math.max(1, Math.ceil(APPS.length / REVEAL_ROWS));
-            const rowsInTallest = Math.min(APPS.length, REVEAL_ROWS);
-            const revealWidth = cols * orbSize + (cols - 1) * orbGap + padding * 2;
-            const revealHeight = rowsInTallest * orbSize + (rowsInTallest - 1) * orbGap + padding * 2;
+            const TOP_MARGIN = 24;
+            const APPS_GAP = 56;
+            const N = APPS.length;
+            const NATURAL_ORB = 72;
+            const NATURAL_GAP = 24;
+            const MIN_ORB = 44;
+
+            const available = faceY - APPS_GAP - (monitor.y + TOP_MARGIN);
+            const naturalH = N * NATURAL_ORB + (N - 1) * NATURAL_GAP + padding * 2;
+
+            let orbSize = NATURAL_ORB;
+            let orbGap = NATURAL_GAP;
+            if (N > 1 && naturalH > available) {
+                // Hold gap-to-orb ratio at 1:3 so spacing reads consistent.
+                const room = available - padding * 2;
+                const ratio = NATURAL_GAP / NATURAL_ORB;  // 1/3
+                const calc = Math.floor(room / (N + (N - 1) * ratio));
+                orbSize = Math.max(MIN_ORB, Math.min(NATURAL_ORB, calc));
+                orbGap = Math.max(8, Math.floor(orbSize * ratio));
+            }
+
+            // Apply size inline. CSS no longer carries `!important` on width,
+            // but we still mark these `!important` so any inherited shell
+            // theme can't reintroduce a pin. Without this, set_size loses to
+            // CSS in the layout phase and bottom orbs get pushed off-screen.
+            const itemStyle =
+                `width: ${orbSize}px !important; height: ${orbSize}px !important;` +
+                ` min-width: 0 !important; min-height: 0 !important;`;
+            this._revealItems.forEach(item => {
+                item.set_size(orbSize, orbSize);
+                item.set_style(itemStyle);
+                const inner = item.get_child();
+                if (inner) inner.set_style(itemStyle);
+            });
+            // Each column is a vertical BoxLayout — update its spacing too,
+            // otherwise the CSS-defined 24px gap stays even when orbs shrink.
+            const colStyle = `spacing: ${orbGap}px;`;
+            this._reveal.get_children().forEach(col => col.set_style(colStyle));
+
+            const revealWidth = orbSize + padding * 2;
+            const revealHeight = N * orbSize + (N - 1) * orbGap + padding * 2;
             this._reveal.set_size(revealWidth, revealHeight);
-            const APPS_GAP = 72;
             const revealX = faceX + Math.round((FACE_W - revealWidth) / 2);
-            const revealY = Math.max(monitor.y + 24, faceY - APPS_GAP - revealHeight);
+            const revealY = Math.max(monitor.y + TOP_MARGIN, faceY - APPS_GAP - revealHeight);
             this._reveal.set_position(revealX, revealY);
         }
         if (this._overlay) {
