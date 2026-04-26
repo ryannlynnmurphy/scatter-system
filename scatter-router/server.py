@@ -1,5 +1,5 @@
 """Scatter router v1.1. Routes + IPW logging + web UI."""
-import json, os, re, subprocess, time, urllib.request
+import itertools, json, os, re, socket, subprocess, time, urllib.error, urllib.request
 from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -9,9 +9,68 @@ from anthropic import Anthropic
 
 load_dotenv(Path(__file__).parent / ".env")
 claude = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-OLLAMA = "http://127.0.0.1:11434/api/generate"
-OLLAMA_CHAT = "http://127.0.0.1:11434/api/chat"
 LOCAL_MODEL = os.environ.get("LOCAL_MODEL", "llama3.2:3b")
+
+# ── Cluster-aware Ollama dispatch ──────────────────────────────────────
+# Workers are loaded from ~/.scatter/cluster.json. Primary workers are
+# round-robined; fallbacks (e.g. localhost) are tried in order if all
+# primaries fail. If the manifest is missing, we degrade to localhost-
+# only (preserves behavior for fresh installs).
+_CLUSTER_PATH = Path.home() / ".scatter" / "cluster.json"
+_DEFAULT_WORKERS = [
+    {"endpoint": "http://127.0.0.1:11434", "host": "localhost", "role": "primary"},
+]
+
+
+def _load_workers() -> list[dict]:
+    if not _CLUSTER_PATH.exists():
+        return list(_DEFAULT_WORKERS)
+    try:
+        manifest = json.loads(_CLUSTER_PATH.read_text())
+        workers = manifest.get("workers", [])
+        return workers or list(_DEFAULT_WORKERS)
+    except Exception:
+        return list(_DEFAULT_WORKERS)
+
+
+_WORKERS: list[dict] = _load_workers()
+_PRIMARY_CYCLE = itertools.cycle(
+    [w for w in _WORKERS if w.get("role") == "primary"] or _WORKERS
+)
+
+
+def _pick_worker_chain() -> list[dict]:
+    """Return [chosen_primary, ...other_primaries, ...fallbacks]. Caller
+    iterates until one returns 200, so a Pi outage transparently falls
+    back to the next worker, ultimately to localhost."""
+    primary = [w for w in _WORKERS if w.get("role") == "primary"]
+    fallbacks = [w for w in _WORKERS if w.get("role") != "primary"]
+    if not primary:
+        return fallbacks
+    chosen = next(_PRIMARY_CYCLE)
+    others = [w for w in primary if w.get("host") != chosen.get("host")]
+    return [chosen] + others + fallbacks
+
+
+def _ollama_chat(payload: dict, timeout: int = 300) -> tuple[dict, dict]:
+    """POST to /api/chat on the next worker, falling back through the
+    chain on URLError/timeout/5xx. Returns (response_json, worker_used)."""
+    last_err: Exception | None = None
+    for w in _pick_worker_chain():
+        url = f"{w['endpoint'].rstrip('/')}/api/chat"
+        try:
+            req = urllib.request.Request(
+                url,
+                data=json.dumps(payload).encode(),
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=timeout) as r:
+                return json.loads(r.read()), w
+        except (urllib.error.URLError, urllib.error.HTTPError,
+                socket.timeout, ConnectionError, TimeoutError) as e:
+            last_err = e
+            continue
+    raise RuntimeError(f"all workers failed: {last_err}")
 
 # Scatter's voice — used for BOTH local and online paths so replies stay
 # in-character regardless of which model is behind them. No "I'm Claude
@@ -228,19 +287,15 @@ def run_recall(m, history=None):
         f"The person just asked: {m!r}\n\n"
         "Answer in one or two warm, plain sentences."
     )
-    req = urllib.request.Request(OLLAMA_CHAT,
-        data=json.dumps({
-            "model": LOCAL_MODEL,
-            "messages": [
-                {"role": "system", "content": RECALL_SYSTEM},
-                {"role": "user", "content": prompt},
-            ],
-            "stream": False,
-            "options": {"temperature": 0.4, "num_predict": 180},
-        }).encode(),
-        headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=120) as r:
-        data = json.loads(r.read())
+    data, _worker = _ollama_chat({
+        "model": LOCAL_MODEL,
+        "messages": [
+            {"role": "system", "content": RECALL_SYSTEM},
+            {"role": "user", "content": prompt},
+        ],
+        "stream": False,
+        "options": {"temperature": 0.4, "num_predict": 180},
+    }, timeout=120)
     tokens = data.get("prompt_eval_count", 0) + data.get("eval_count", 0)
     return data.get("message", {}).get("content", "").strip(), tokens
 
@@ -254,16 +309,12 @@ def run_local(m, history=None):
     if history:
         msgs.extend(history)
     msgs.append({"role": "user", "content": m})
-    req = urllib.request.Request(OLLAMA_CHAT,
-        data=json.dumps({
-            "model": LOCAL_MODEL,
-            "messages": msgs,
-            "stream": False,
-            "options": {"temperature": 0.5, "num_predict": 220},
-        }).encode(),
-        headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=300) as r:
-        data = json.loads(r.read())
+    data, _worker = _ollama_chat({
+        "model": LOCAL_MODEL,
+        "messages": msgs,
+        "stream": False,
+        "options": {"temperature": 0.5, "num_predict": 220},
+    }, timeout=300)
     tokens = data.get("prompt_eval_count", 0) + data.get("eval_count", 0)
     return data.get("message", {}).get("content", ""), tokens
 

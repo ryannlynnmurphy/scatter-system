@@ -1,263 +1,117 @@
-# Home Data Center: k3s + Ollama on 4× Pi 5
+# Home Data Center: Ollama on 4× Pi 5
 
-Turn four Pi 5s into a distributed inference cluster that the Scatter router can talk to. Uses **k3s** (lightweight Kubernetes) because it's what people actually run on edge/home hardware — not full Kubernetes, which would melt a Pi.
+Turn four Pi 5s into a distributed inference pool that the Scatter router round-robins across. **No k3s, no DaemonSet, no Helm.** Plain Ollama systemd units on each Pi, exposed on `0.0.0.0:11434`, listed in `~/.scatter/cluster.json`. The router (`scatter-router/server.py`) loads the manifest at startup and dispatches `/api/chat` calls to whichever Pi is next in the cycle, falling back through the chain on failure.
 
-Estimated total time (all stages, first run): **3–4 hours.**
+Estimated total time (first run): **30–45 min**, mostly spent on per-Pi model pulls (~2GB each) running in parallel.
 
 ## Prerequisites
 
 Physical:
 - 4× Raspberry Pi 5 (8GB recommended), each with power + microSD
-- Gigabit ethernet switch + 4 ethernet cables
-- Uplink cable from switch to your home router
-- Laptop on same network
-- USB SD card reader (for the 4th Pi that still needs flashing)
+- All on the same subnet as the laptop (10.42.0.0/24 over USB ethernet, in this house)
 
-Software on laptop:
-- SSH keys (if you push to GitHub via SSH, you have them)
-- `kubectl` (we'll install below)
+SSH:
+- Aliases `pi-1` through `pi-4` resolved in `~/.ssh/config`
+- Key auth working
+- `sudo` available with password (for the one-time Ollama install)
 
-## Stage 1 — Flash + network the 4th Pi
+## Stage 1 — Install Ollama on each Pi
 
-On your laptop:
+Run from the laptop:
 
 ```bash
-# Install Raspberry Pi Imager if you don't have it
-sudo apt install rpi-imager  # or: flatpak install flathub org.raspberrypi.rpi-imager
+~/deploy-ollama-to-pis.sh
 ```
 
-In Imager:
-- OS: "Raspberry Pi OS Lite (64-bit)" — no desktop, leaner, faster boot
-- Advanced settings (gear icon):
-  - Hostname: `pi4`
-  - Enable SSH: yes, use public-key auth, paste `~/.ssh/id_ed25519.pub` (or `id_rsa.pub`)
-  - Set username: your username, set password
-- Write. Takes ~5 min.
+This is idempotent. Per Pi it:
+1. Installs Ollama if missing (`curl -fsSL https://ollama.com/install.sh | sh`)
+2. Writes `/etc/systemd/system/ollama.service`
+3. Adds `OLLAMA_HOST=0.0.0.0:11434` override so the laptop can reach it
+4. `systemctl enable --now ollama`
+5. Verifies port 11434 is listening
 
-Plug the Pi into the switch via ethernet. Power on.
+Sudo password prompts will pass through the `-tt` allocation.
 
-## Stage 2 — Get SSH working on all 4 Pis
+## Stage 2 — Pull a model on each Pi
 
-The 3 already-flashed Pis are on WiFi. Move them to ethernet too:
-
-```bash
-# On each Pi via direct monitor+keyboard (one-time):
-sudo raspi-config
-# → System Options → Hostname → set to pi1, pi2, pi3 respectively
-# → Interface Options → SSH → enable
-# reboot
-```
-
-Plug all 4 into the switch.
-
-On your laptop, find their IPs. Either check your home router's admin page (DHCP clients list) or:
+In parallel from the laptop:
 
 ```bash
-sudo apt install arp-scan
-sudo arp-scan --localnet | grep -i raspberry
-```
-
-Note the 4 IPs. Copy your SSH key to each:
-
-```bash
-for ip in <pi1-ip> <pi2-ip> <pi3-ip> <pi4-ip>; do
-    ssh-copy-id $USER@$ip
+for p in pi-1 pi-2 pi-3 pi-4; do
+  ssh -f $p "ollama pull llama3.2:3b > /tmp/ollama-pull.log 2>&1"
 done
 ```
 
-Verify you can SSH passwordless:
+Each Pi pulls ~2GB independently (no laptop bandwidth). Watch progress with:
 
 ```bash
-for ip in <pi1-ip> <pi2-ip> <pi3-ip> <pi4-ip>; do
-    ssh $USER@$ip "hostname && uptime"
+ssh pi-1 "tail -f /tmp/ollama-pull.log"
+```
+
+## Stage 3 — Write the cluster manifest
+
+`~/.scatter/cluster.json`:
+
+```json
+{
+  "head_node": "localhost",
+  "workers": [
+    {"host": "pi-1", "endpoint": "http://pi-1:11434", "model": "llama3.2:3b", "capabilities": ["inference"], "role": "primary"},
+    {"host": "pi-2", "endpoint": "http://pi-2:11434", "model": "llama3.2:3b", "capabilities": ["inference"], "role": "primary"},
+    {"host": "pi-3", "endpoint": "http://pi-3:11434", "model": "llama3.2:3b", "capabilities": ["inference"], "role": "primary"},
+    {"host": "pi-4", "endpoint": "http://pi-4:11434", "model": "llama3.2:3b", "capabilities": ["inference"], "role": "primary"},
+    {"host": "localhost", "endpoint": "http://127.0.0.1:11434", "model": "llama3.2:3b", "capabilities": ["inference"], "role": "fallback"}
+  ]
+}
+```
+
+`role: primary` workers are round-robined. `role: fallback` workers are tried only if every primary fails. Localhost as fallback means the laptop's own Ollama answers if every Pi is down.
+
+## Stage 4 — Restart the router
+
+```bash
+pkill -f "uvicorn server:app"
+cd ~/scatter-system/scatter-router
+setsid ./.venv/bin/uvicorn server:app --host 127.0.0.1 --port 8787 \
+  >> ~/.scatter/router.log 2>&1 < /dev/null &
+```
+
+Or just log out and log back in — the autostart entry at `~/.config/autostart/scatter-router.desktop` brings it up.
+
+## Stage 5 — Smoke test
+
+```bash
+curl -sS -X POST http://127.0.0.1:8787/chat \
+  -H 'Content-Type: application/json' \
+  -d '{"message":"hi","prefer_local":true}'
+```
+
+Expected: `{"response":"Hi back!","route":"local:llama3.2","tokens":...,"ms":...}`. Inference latency on Pi 5 is ~40–60s for a short reply on llama3.2:3b — that's the cost of CPU inference on edge hardware. If it returns in <2s, the call probably hit `cloud:sonnet` instead — drop `prefer_local: true` and you'll see that path.
+
+To confirm which Pi served a request, check loaded-model state right after:
+
+```bash
+for p in pi-1 pi-2 pi-3 pi-4; do
+  printf "%s: " "$p"
+  curl -sS http://${p}:11434/api/ps \
+    | python3 -c "import json,sys; d=json.load(sys.stdin); print([m['name'] for m in d.get('models',[])])"
 done
 ```
 
-**Reserve IPs on your home router** (admin page → DHCP reservations, map each Pi's MAC to a permanent IP). This is critical — without it, IPs can change on reboot and break k3s.
+Each Pi loads the model on first request and evicts it after `OLLAMA_KEEP_ALIVE` seconds (default 5 min).
 
-## Stage 3 — Install k3s server on pi1
+## Recovery
 
-```bash
-ssh $USER@<pi1-ip>
+If a Pi goes offline, the router transparently skips it via the fallback chain — no edits needed. Bring it back with `ssh pi-N "sudo systemctl start ollama"` and the next round-robin tick picks it up.
 
-# Install k3s as server. Writes kubeconfig to /etc/rancher/k3s/k3s.yaml.
-curl -sfL https://get.k3s.io | sh -
+If the manifest is missing or corrupt, the router degrades to localhost-only (default workers list in `_load_workers()` in `server.py`).
 
-# Verify
-sudo kubectl get nodes
-# should show pi1 as a single Ready node
+## Why not k3s
 
-# Grab the token (needed for other Pis to join)
-sudo cat /var/lib/rancher/k3s/server/node-token
-# copy this string somewhere — you'll need it in Stage 4
+The earlier draft of this doc spec'd k3s + an Ollama DaemonSet behind a NodePort. Three reasons we walked back:
 
-exit
-```
+1. **Operational weight.** k3s on a Pi 5 idles at ~200 MB RAM and 2–3% CPU per node. For a 4-node cluster that exists to run *one daemon per node*, the orchestration layer is heavier than what it orchestrates.
+2. **Failure surface.** k3s adds etcd, the control plane, the kubelet, the CNI, and the LB. Ollama on bare systemd has one failure mode: the unit didn't start. k3s has dozens.
+3. **The thermodynamic argument.** Scatter's whole posture is intelligence-per-watt. Burning ~5 W per Pi on Kubernetes overhead to dispatch inference jobs that Ollama can answer directly is the opposite move.
 
-## Stage 4 — Join pi2, pi3, pi4 as agents
-
-From your laptop, SSH to each of pi2/pi3/pi4 and run:
-
-```bash
-curl -sfL https://get.k3s.io | K3S_URL=https://<pi1-ip>:6443 K3S_TOKEN=<token-from-stage-3> sh -
-```
-
-After all three join, verify from pi1:
-
-```bash
-ssh $USER@<pi1-ip> "sudo kubectl get nodes"
-# Should show 4 nodes: pi1 (control-plane,master), pi2/3/4 (<none>)
-# All Ready.
-```
-
-## Stage 5 — Control k3s from your laptop
-
-Copy the kubeconfig down and rewrite the server address so it points at pi1 (not 127.0.0.1):
-
-```bash
-mkdir -p ~/.kube
-scp $USER@<pi1-ip>:/etc/rancher/k3s/k3s.yaml ~/.kube/config
-sed -i "s/127.0.0.1/<pi1-ip>/" ~/.kube/config
-chmod 600 ~/.kube/config
-
-# Install kubectl on laptop
-sudo apt install kubectl  # or snap install kubectl --classic
-
-kubectl get nodes
-# Same output as running it on pi1
-```
-
-## Stage 6 — Deploy Ollama as a DaemonSet
-
-One pod per node. Each pod pulls qwen2.5-coder:1.5b into its own volume. Service exposes them together.
-
-Save this on your laptop as `~/scatter/docs/ollama-k8s.yaml`:
-
-```yaml
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: ollama
-  namespace: default
-spec:
-  selector:
-    matchLabels:
-      app: ollama
-  template:
-    metadata:
-      labels:
-        app: ollama
-    spec:
-      containers:
-      - name: ollama
-        image: ollama/ollama:latest
-        ports:
-        - containerPort: 11434
-          name: http
-        volumeMounts:
-        - name: models
-          mountPath: /root/.ollama
-        resources:
-          requests:
-            memory: "2Gi"
-            cpu: "500m"
-          limits:
-            memory: "6Gi"
-      volumes:
-      - name: models
-        hostPath:
-          path: /var/lib/ollama
-          type: DirectoryOrCreate
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: ollama
-  namespace: default
-spec:
-  type: NodePort
-  selector:
-    app: ollama
-  ports:
-  - port: 11434
-    targetPort: 11434
-    nodePort: 31134
-```
-
-Apply:
-
-```bash
-kubectl apply -f ~/scatter/docs/ollama-k8s.yaml
-kubectl get pods -l app=ollama
-# Wait for all 4 to go Running. First pull of image takes a few min.
-```
-
-Pull the model on each node (once):
-
-```bash
-for ip in <pi1-ip> <pi2-ip> <pi3-ip> <pi4-ip>; do
-    ssh $USER@$ip "sudo docker exec \$(sudo docker ps -q --filter name=ollama) ollama pull qwen2.5-coder:1.5b" &
-done
-wait
-```
-
-(Or: use a Kubernetes Job to pull on each node. DaemonSet pattern above is simpler but less declarative.)
-
-## Stage 7 — Update the router to talk to the cluster
-
-Edit `~/scatter/server.py`:
-
-```python
-# Change this line:
-OLLAMA = "http://127.0.0.1:11434/api/generate"
-
-# To something like (pick one node — k8s load-balances internally):
-OLLAMA = "http://<pi1-ip>:31134/api/generate"
-
-# Or better: round-robin across all four (real parallelism for julienne later):
-import random
-OLLAMA_NODES = [
-    "http://<pi1-ip>:31134/api/generate",
-    "http://<pi2-ip>:31134/api/generate",
-    "http://<pi3-ip>:31134/api/generate",
-    "http://<pi4-ip>:31134/api/generate",
-]
-OLLAMA = random.choice(OLLAMA_NODES)  # or rotate per call
-```
-
-Restart uvicorn. Test from the web UI — `local:qwen` should now resolve against the cluster instead of the laptop.
-
-## Verification
-
-- `kubectl get nodes` → 4 Ready
-- `kubectl get pods -l app=ollama` → 4 Running
-- `curl http://<any-pi-ip>:31134/api/tags` → returns `qwen2.5-coder:1.5b` in the model list
-- Scatter UI chat with `local only` checked → response comes back, watts logged
-
-## What this unlocks
-
-- **Julienne becomes real.** The parallelism that was theater on one laptop is real across 4 nodes.
-- **Resilience.** If any Pi crashes, k3s restarts the pod. If a node dies, the other 3 still serve.
-- **Declarative upgrades.** Change the image tag in the YAML, `kubectl apply`, done.
-- **Transferable skill.** `kubectl` is what Alex uses for fintech at scale. Same commands, different cluster.
-
-## Known limitations (tonight's scope)
-
-- No GPU (Pi 5 has none) — inference still CPU-only, just distributed.
-- 4× Pi 5 with 1.5b model is roughly 4× the throughput of one Pi, not 4× the intelligence.
-- Model pull per-node is manual on first run — Stage 7 could be smoother with a proper Job resource.
-- Ethernet via consumer switch; no redundant networking. If the switch dies, the whole cluster is offline.
-
-## If it breaks
-
-- `kubectl describe pod <pod-name>` — what went wrong
-- `kubectl logs <pod-name>` — what the pod said
-- `sudo journalctl -u k3s -n 50` (on server) or `-u k3s-agent` (on agents)
-- Reset worst case: `/usr/local/bin/k3s-uninstall.sh` on server, `/usr/local/bin/k3s-agent-uninstall.sh` on agents, start over.
-
-## Next after this ships
-
-- **Julienne for real**: edit the router to chunk long inputs and fan out to the 4 nodes in parallel.
-- **Model auto-pull**: convert manual `ollama pull` into an init container or Job.
-- **Real wattmeter**: Kill A Watt between the switch and the wall → real IPW numbers replace estimates.
-- **Monitoring**: `kube-prometheus-stack` chart for Grafana dashboards of node CPU/RAM/throughput. Skip for v0.
+The bare-systemd path is simpler, lighter, and more aligned. k3s remains a valid choice for clusters that *also* need to run other workloads — but a homelab inference pool is not that cluster.
