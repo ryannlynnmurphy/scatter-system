@@ -116,8 +116,14 @@
   function render(call, response) {                                                                                                            
     const el = document.createElement('div');
     el.className = 'call';
+    // Joules badge — never invite false comparisons. Local routes show a
+    // single `~XJ (estimated)` label. Cloud routes show `~XJ (laptop only;
+    // DC share not measured)` so a reader doesn't conclude cloud is greener
+    // when the datacenter portion is just hidden, not zero.
     const joules = response.watt_seconds != null
-      ? `<span class="joules">~${response.watt_seconds.toFixed(1)}J (estimated)</span>`
+      ? (response.watts_complete === false
+          ? `<span class="joules">~${response.watt_seconds.toFixed(1)}J (laptop only; DC share not measured)</span>`
+          : `<span class="joules">~${response.watt_seconds.toFixed(1)}J (estimated)</span>`)
       : '';
     el.innerHTML = `
       <div class="meta">
@@ -147,20 +153,32 @@
     try {                                                                                                                                      
       const r = await fetch('/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },                                                                                       
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message, prefer_local: preferLocal.checked }),
-      });                                                                                                                                      
-      const d = await r.json();
-      pending.remove();                                                                                                                        
-      render(message, d);
-      refreshIpw();
-      refreshStats();                                                                                                                            
+      });
+      const d = await r.json().catch(() => ({}));
+      pending.remove();
+      if (!r.ok) {
+        // FastAPI errors come back as {detail: "..."}. Surface it instead of
+        // rendering a blank call. Without this, "all workers failed" was silent.
+        const detail = (d && d.detail) ? (typeof d.detail === 'string' ? d.detail : JSON.stringify(d.detail)) : `HTTP ${r.status}`;
+        const errEl = document.createElement('div');
+        errEl.className = 'call err';
+        errEl.innerHTML = `<div class="meta"><span>error · HTTP ${r.status}</span></div><div class="message">&gt; ${message}</div><div class="response"></div>`;
+        errEl.querySelector('.response').textContent = detail;
+        stream.appendChild(errEl);
+        stream.scrollTop = stream.scrollHeight;
+      } else {
+        render(message, d);
+        refreshIpw();
+        refreshStats();
+      }
     } catch (err) {
       pending.remove();
       const errEl = document.createElement('div');
-      errEl.className = 'call err';                                                                                                            
+      errEl.className = 'call err';
       errEl.innerHTML = `<div class="meta"><span>error</span></div><div class="response">${err.message}</div>`;
-      stream.appendChild(errEl);                                                                                                               
+      stream.appendChild(errEl);
     }                                                                                                                                          
   });
                                                                                                                                                

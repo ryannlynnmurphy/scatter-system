@@ -108,7 +108,14 @@ fi
 
 say "installing python deps"
 ./.venv/bin/pip install -q --upgrade pip
-./.venv/bin/pip install -q fastapi uvicorn anthropic httpx python-dotenv pydantic
+# Source of truth is scatter-router/requirements.txt — same versions the
+# laptop runs. Avoids drift between phone and laptop deps.
+if [ -f requirements.txt ]; then
+  ./.venv/bin/pip install -q -r requirements.txt
+else
+  warn "no requirements.txt found, falling back to unpinned install"
+  ./.venv/bin/pip install -q fastapi uvicorn anthropic httpx python-dotenv pydantic
+fi
 
 # ── 6. Phone-side cluster.json ──────────────────────────────────────────
 # The phone's manifest prefers the home tailnet workers (when reachable)

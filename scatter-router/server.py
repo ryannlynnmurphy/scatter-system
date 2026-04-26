@@ -8,7 +8,12 @@ from pydantic import BaseModel
 from anthropic import Anthropic
 
 load_dotenv(Path(__file__).parent / ".env")
-claude = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+# Anthropic client is optional — the router runs in offline-only mode
+# without a key (e.g. on the Pixel-portable build, or in a school deploy
+# that's intentionally cloud-free). Cloud routes will return a clear 503
+# at request time instead of crashing at import.
+_anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+claude = Anthropic(api_key=_anthropic_key) if _anthropic_key else None
 LOCAL_MODEL = os.environ.get("LOCAL_MODEL", "llama3.2:3b")
 
 # ── Cluster-aware Ollama dispatch ──────────────────────────────────────
@@ -33,21 +38,39 @@ def _load_workers() -> list[dict]:
         return list(_DEFAULT_WORKERS)
 
 
-_WORKERS: list[dict] = _load_workers()
-_PRIMARY_CYCLE = itertools.cycle(
-    [w for w in _WORKERS if w.get("role") == "primary"] or _WORKERS
-)
+# Manifest state — reloaded on mtime change so editing cluster.json
+# (e.g. adding the Pixel as a fifth worker) takes effect on the next
+# /chat without restarting the router.
+_workers: list[dict] = []
+_workers_mtime: float = 0.0
+_primary_cycle: itertools.cycle | None = None
+
+
+def _refresh_workers_if_changed() -> None:
+    """If cluster.json was modified since we last loaded it, rebuild the
+    worker list and the round-robin cycle. Cheap stat() per request."""
+    global _workers, _workers_mtime, _primary_cycle
+    try:
+        mtime = _CLUSTER_PATH.stat().st_mtime
+    except FileNotFoundError:
+        mtime = 0.0
+    if mtime != _workers_mtime or _primary_cycle is None:
+        _workers = _load_workers()
+        _workers_mtime = mtime
+        primary = [w for w in _workers if w.get("role") == "primary"]
+        _primary_cycle = itertools.cycle(primary or _workers)
 
 
 def _pick_worker_chain() -> list[dict]:
     """Return [chosen_primary, ...other_primaries, ...fallbacks]. Caller
     iterates until one returns 200, so a Pi outage transparently falls
     back to the next worker, ultimately to localhost."""
-    primary = [w for w in _WORKERS if w.get("role") == "primary"]
-    fallbacks = [w for w in _WORKERS if w.get("role") != "primary"]
+    _refresh_workers_if_changed()
+    primary = [w for w in _workers if w.get("role") == "primary"]
+    fallbacks = [w for w in _workers if w.get("role") != "primary"]
     if not primary:
         return fallbacks
-    chosen = next(_PRIMARY_CYCLE)
+    chosen = next(_primary_cycle)
     others = [w for w in primary if w.get("host") != chosen.get("host")]
     return [chosen] + others + fallbacks
 
@@ -70,7 +93,12 @@ def _ollama_chat(payload: dict, timeout: int = 300) -> tuple[dict, dict]:
                 socket.timeout, ConnectionError, TimeoutError) as e:
             last_err = e
             continue
-    raise RuntimeError(f"all workers failed: {last_err}")
+    # Surface as 503 with structured JSON so the UI gets `{detail: "..."}`
+    # not an HTML 500 page. Lets the chat form render a clear error.
+    raise HTTPException(
+        503,
+        f"every worker in cluster.json failed (last: {type(last_err).__name__}: {last_err})",
+    )
 
 # Scatter's voice — used for BOTH local and online paths so replies stay
 # in-character regardless of which model is behind them. No "I'm Claude
@@ -134,7 +162,26 @@ def log_chat(user_text: str, reply: str, route: str, ms: int) -> None:
     }
     with CHAT_LOG_PATH.open("a") as f:
         f.write(json.dumps(entry) + "\n")
-WATTS = {"local:shell": 1.0, "local:launch": 0.5, "cloud:sonnet": 5.0, "local:qwen": 30.0}
+# Per-route average power draw (watts), all estimated until a calibrated
+# USB meter is attached per CORE_SYNTHESIS.md #9. The hard truths the
+# review surfaced and we now encode honestly:
+#  - local:llama3.2 is the Pi 5 path; under load it draws 7–15 W not 5 W
+#  - cloud:sonnet at 5 W is LAPTOP RECEIVE-DRAW ONLY. Anthropic's
+#    datacenter share is unmeasured (Epoch AI estimates ~5–10 W per
+#    concurrent request inside the DC, but we don't see it). The web UI
+#    discloses this via WATTS_NOTE so a parent doesn't read "5 J cloud
+#    vs 600 J local" and conclude cloud is greener — that comparison is
+#    structurally incomplete.
+WATTS = {
+    "local:shell":    1.0,
+    "local:launch":   0.5,
+    "local:recall":  12.0,
+    "local:llama3.2":12.0,
+    "local:qwen":    30.0,
+    "cloud:sonnet":   5.0,   # laptop receive draw only; DC share not measured
+}
+# Routes whose joules estimate is incomplete (missing datacenter share).
+WATTS_INCOMPLETE_ROUTES = {"cloud:sonnet"}
 
 def log_ipw(route, duration_s, tokens):
     entry = {
@@ -334,6 +381,14 @@ def run_local(m, history=None):
 
 
 def run_cloud(m, history=None):
+    if claude is None:
+        # Offline-only build (no ANTHROPIC_API_KEY). Surface a clear error
+        # rather than letting the request silently fall through.
+        raise HTTPException(
+            503,
+            "cloud route disabled: ANTHROPIC_API_KEY not set. "
+            "set it in scatter-router/.env or use prefer_local.",
+        )
     msgs = []
     if history:
         msgs.extend(history)
@@ -410,11 +465,16 @@ def chat(msg: Msg):
         log_chat(msg.message, resp, route, ms)
     # Surface estimated joules for this request — energy as a first-class
     # signal per CORE_SYNTHESIS.md #9. Watts are estimates until a USB
-    # power meter is calibrated; the UI labels them with `~`.
+    # power meter is calibrated; the UI labels them with `~`. For cloud
+    # routes the number captures laptop-side draw only — the datacenter's
+    # share is unmeasured. watts_complete=False marks that disclosure so
+    # the UI can render a different label and not invite false comparisons.
     watt_seconds = round(duration * WATTS.get(route, 5.0), 3)
+    watts_complete = route not in WATTS_INCOMPLETE_ROUTES
     return {
         "response": resp, "route": route, "tokens": tokens, "ms": ms,
         "watt_seconds": watt_seconds,
+        "watts_complete": watts_complete,
     }
 
 
