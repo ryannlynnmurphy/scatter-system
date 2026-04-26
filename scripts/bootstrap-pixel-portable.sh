@@ -38,14 +38,42 @@ say()  { printf "${GREEN}>> %s${RESET}\n" "$*"; }
 warn() { printf "${YELLOW}!! %s${RESET}\n" "$*"; }
 die()  { printf "${RED}xx %s${RESET}\n" "$*"; exit 1; }
 
-# ── Sanity ──────────────────────────────────────────────────────────────
+# ── Sanity: am I actually on the phone? ─────────────────────────────────
+# This script provisions the Pixel as portable Scatter. Running it on
+# anything else (laptop, a Pi, a CI box) will fail in confusing ways:
+# wrong arch for ollama install, no sudo when apt needs it, possibly
+# clobbering the laptop's own ~/scatter-system clone. Guard hard.
 
-if [ ! -f /etc/debian_version ]; then
-  die "this script must run inside the Debian proot (proot-distro login debian)."
+ALLOW_ANYWHERE="${SCATTER_BOOTSTRAP_ANYWHERE:-0}"
+
+is_termux_proot() {
+  # Termux's proot-distro mounts the host /data/data path inside the proot,
+  # and exports PROOT_TMP_DIR. Either signal is enough.
+  [ -d /data/data/com.termux ] || [ -n "${PROOT_TMP_DIR:-}" ]
+}
+
+if ! is_termux_proot && [ "$ALLOW_ANYWHERE" != "1" ]; then
+  printf "${RED}xx not running inside Termux's Debian proot.${RESET}\n\n"
+  printf "this script provisions the Pixel 9a as portable Scatter. it is\n"
+  printf "not meant to run on the laptop, the Pis, or any other machine.\n\n"
+  printf "to run it on the phone:\n"
+  printf "  1. open Termux on the Pixel (install from F-Droid if needed)\n"
+  printf "  2. inside Termux:  pkg install proot-distro\n"
+  printf "  3.                 proot-distro install debian\n"
+  printf "  4.                 proot-distro login debian\n"
+  printf "  5. inside the proot, fetch + run this script:\n"
+  printf "       curl -fsSL https://raw.githubusercontent.com/ryannlynnmurphy/scatter-system/master/scripts/bootstrap-pixel-portable.sh | bash\n\n"
+  printf "if you really mean to run it here, set SCATTER_BOOTSTRAP_ANYWHERE=1.\n"
+  printf "(this skips the guard. on the laptop you'll likely also need sudo.)\n"
+  exit 1
 fi
 
-if [ "$(uname -m)" != "aarch64" ]; then
-  warn "expected aarch64, got $(uname -m). continuing but Ollama may not start."
+if [ ! -f /etc/debian_version ]; then
+  die "this script needs Debian (the proot installs it). got: $(. /etc/os-release 2>/dev/null && echo "$PRETTY_NAME" || echo unknown)"
+fi
+
+if [ "$(uname -m)" != "aarch64" ] && [ "$ALLOW_ANYWHERE" != "1" ]; then
+  die "expected aarch64 (Pixel SoC), got $(uname -m). this is the phone-only script — set SCATTER_BOOTSTRAP_ANYWHERE=1 to override."
 fi
 
 say "bootstrapping portable Scatter on $(uname -mr)"
