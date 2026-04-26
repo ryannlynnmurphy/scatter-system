@@ -151,9 +151,23 @@ def log_ipw(route, duration_s, tokens):
 
 app = FastAPI()
 
+# Path to the canonical design-system tokens. Served from /tokens.css so
+# every Scatter web surface (router, studio, welcome) cascades from one
+# source. When tokens.css changes, every surface that <link>s here picks
+# it up on next reload — no copy-paste drift.
+DESIGN_TOKENS_PATH = Path(__file__).parent.parent / "scatter-design-system" / "tokens.css"
+
+
 @app.get("/")
 def index():
     return FileResponse(Path(__file__).parent / "index.html")
+
+
+@app.get("/tokens.css")
+def tokens_css():
+    if DESIGN_TOKENS_PATH.exists():
+        return FileResponse(DESIGN_TOKENS_PATH, media_type="text/css")
+    raise HTTPException(404, "tokens.css not found at scatter-design-system/")
 
 @app.get("/ipw-summary")
 def ipw_summary():
@@ -394,7 +408,14 @@ def chat(msg: Msg):
     # Only log prose exchanges — launches and system queries aren't a chat.
     if intent not in ("launch", "system_query"):
         log_chat(msg.message, resp, route, ms)
-    return {"response": resp, "route": route, "tokens": tokens, "ms": ms}
+    # Surface estimated joules for this request — energy as a first-class
+    # signal per CORE_SYNTHESIS.md #9. Watts are estimates until a USB
+    # power meter is calibrated; the UI labels them with `~`.
+    watt_seconds = round(duration * WATTS.get(route, 5.0), 3)
+    return {
+        "response": resp, "route": route, "tokens": tokens, "ms": ms,
+        "watt_seconds": watt_seconds,
+    }
 
 
 class ChatsQuery(BaseModel):

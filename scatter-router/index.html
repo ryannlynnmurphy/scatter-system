@@ -1,17 +1,23 @@
-  <!DOCTYPE html>                                                                                                                              
+  <!DOCTYPE html>
   <html lang="en">
   <head>
   <meta charset="UTF-8">
   <title>Scatter</title>
+  <link rel="stylesheet" href="/tokens.css">
   <style>
-  :root {                                                                                                                                      
-    --bg: #0a0a0a;
-    --fg: #e5e5e5;                                                                                                                             
-    --dim: #5a5a5a;
-    --amber: #ffb800;
-    --green: #00ff88;                                                                                                                          
-    --err: #ff6b6b;
-  }                                                                                                                                            
+  /* Local aliases derive from the canonical scatter-design-system tokens
+   * (served from /tokens.css). Update tokens.css once and every Scatter
+   * web surface that <link>s it picks up the change. The aliases below
+   * are kept so existing rules in this file keep working unchanged. */
+  :root {
+    --bg:    var(--scatter-black);
+    --fg:    var(--scatter-bright);
+    --dim:   var(--scatter-quiet);
+    --amber: var(--scatter-amber);
+    --green: #00ff88;
+    --err:   #ff6b6b;
+    --watts: var(--scatter-watts, var(--scatter-amber-dim));
+  }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
     background: var(--bg); color: var(--fg);                                                                                                   
@@ -27,8 +33,9 @@
   header .ipw { font-size: 11px; color: var(--dim); }                                                                                          
   main { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 8px; }
   .call { border-left: 2px solid var(--dim); padding-left: 12px; }                                                                             
-  .call .meta { font-size: 11px; color: var(--dim); display: flex; gap: 12px; }                                                                
-  .call .route { text-transform: uppercase; letter-spacing: 1px; }                                                                             
+  .call .meta { font-size: 11px; color: var(--dim); display: flex; gap: 12px; }
+  .call .route { text-transform: uppercase; letter-spacing: 1px; }
+  .call .meta .joules { color: var(--watts); font-variant-numeric: tabular-nums; }
   .call [data-route="cloud:sonnet"] { color: var(--amber); }                                                                                   
   .call [data-route="local:qwen"], .call [data-route="local:launch"] { color: var(--green); }
   .call [data-route="local:shell"] { color: var(--dim); }                                                                                      
@@ -109,13 +116,17 @@
   function render(call, response) {                                                                                                            
     const el = document.createElement('div');
     el.className = 'call';
+    const joules = response.watt_seconds != null
+      ? `<span class="joules">~${response.watt_seconds.toFixed(1)}J (estimated)</span>`
+      : '';
     el.innerHTML = `
-      <div class="meta">                                                                                                                       
+      <div class="meta">
         <span class="route" data-route="${response.route}">${response.route}</span>
-        <span>${response.tokens} tokens</span>                                                                                                 
-        <span>${response.ms}ms</span>                                                                                                          
+        <span>${response.tokens} tokens</span>
+        <span>${response.ms}ms</span>
+        ${joules}
       </div>
-      <div class="message">&gt; ${call}</div>                                                                                                  
+      <div class="message">&gt; ${call}</div>
       <div class="response"></div>
     `;
     el.querySelector('.response').textContent = response.response;                                                                             

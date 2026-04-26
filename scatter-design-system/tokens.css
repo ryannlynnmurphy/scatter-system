@@ -23,6 +23,13 @@
     --scatter-amber-dim:   #8a6200;
     --scatter-amber-wash:  rgba(255, 184, 0, 0.08);
 
+    /* Watts label — desaturated amber, marks every estimated-energy
+     * readout in the UI. Per CORE_SYNTHESIS.md #9: until a calibrated USB
+     * power meter is attached, every joule number is rendered as
+     * `~XJ (estimated)`. The desaturation is the legibility — confident
+     * decimals would lie. */
+    --scatter-watts:       #b88a3a;
+
     /* ── Typography ───────────────────────────────────────────────────── */
     --scatter-display:     'Inter Display', 'Inter', system-ui, sans-serif;
     --scatter-body-font:   'Inter', system-ui, sans-serif;
