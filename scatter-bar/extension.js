@@ -15,6 +15,7 @@
 import GLib from 'gi://GLib';
 import St from 'gi://St';
 import Clutter from 'gi://Clutter';
+import Pango from 'gi://Pango';
 import Soup from 'gi://Soup';
 import Gio from 'gi://Gio';
 
@@ -304,6 +305,10 @@ export default class ScatterBarExtension extends Extension {
             x_align: Clutter.ActorAlign.CENTER,
             y_align: Clutter.ActorAlign.CENTER,
         });
+        // St.Label defaults to ellipsize=END. At certain DPIs the `<` got
+        // chopped to `...`, breaking the iconic glyph. Force NONE so the
+        // bowtie always renders as three discrete characters.
+        bowtieLabel.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
 
         this._glyph = new St.Button({
             style_class: 'scatter-bar-glyph',
@@ -1216,7 +1221,7 @@ export default class ScatterBarExtension extends Extension {
             // the face. Width fills the rest of the bottom edge minus a
             // generous right margin.
             const ENTRY_H = 56;
-            const ENTRY_GAP = 96;
+            const ENTRY_GAP = 132;
             const RIGHT_PAD = CORNER_PAD;
             const entryX = faceX + FACE_W + ENTRY_GAP;
             const entryW = Math.max(
@@ -1240,11 +1245,23 @@ export default class ScatterBarExtension extends Extension {
             // tile is fully on-screen and intact.
             const padding = 18;
             const TOP_MARGIN = 24;
-            const APPS_GAP = 56;
+            // Runway between the top of the bowtie face and the bottom orb.
+            // PREFERRED is what we want at 1080p+ so the cascade reads as
+            // separate from the face. MIN is the legacy 56 — we collapse
+            // toward it on shorter monitors so MIN_ORB orbs still fit.
+            const APPS_GAP_PREFERRED = 140;
+            const APPS_GAP_MIN = 56;
             const N = APPS.length;
             const NATURAL_ORB = 72;
             const NATURAL_GAP = 24;
             const MIN_ORB = 44;
+            const MIN_ORB_GAP = 8;
+            const totalRoom = faceY - (monitor.y + TOP_MARGIN);
+            const minColumnH = N * MIN_ORB + (N - 1) * MIN_ORB_GAP + padding * 2;
+            const APPS_GAP = Math.max(
+                APPS_GAP_MIN,
+                Math.min(APPS_GAP_PREFERRED, totalRoom - minColumnH),
+            );
 
             const available = faceY - APPS_GAP - (monitor.y + TOP_MARGIN);
             const naturalH = N * NATURAL_ORB + (N - 1) * NATURAL_GAP + padding * 2;
