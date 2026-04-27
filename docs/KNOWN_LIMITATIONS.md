@@ -1,0 +1,70 @@
+# Known Limitations
+
+A short, honest list of what's true about Scatter as of 2026-04-26 — not bugs, but real constraints we chose to ship with rather than paper over. Each entry names the limitation, why it exists, and the next commit that would change the answer.
+
+The discipline is from `CONFABULATORY_PHILOSOPHY.md` — confabulation is when something performs an answer it doesn't have. This doc exists so the system doesn't.
+
+---
+
+## 1. The cloud-default routing in `/chat`
+
+`scatter-router/server.py` routes any prompt without `prefer_local: true` to `cloud:sonnet` (Anthropic). For *chat*, that's the right call — Sonnet is fast and warm. For *teaching*, it would be wrong: a child asking "teach me long division" should not have her query routed to Anthropic by default. This is on-thesis with `CONFABULATORY_PHILOSOPHY.md` proposition 4 and `CORE_SYNTHESIS.md` #6.
+
+**Today:** `/chat` routes to cloud unless overridden. Teaching uses the same flat endpoint.
+**Next commit that fixes it:** the `/v1/teach/*` flow defined in `CORE_SYNTHESIS.md` D6–D10. Distinct surface, local-default, two-model verification, parent observer capability.
+
+---
+
+## 2. The watts comparison is incomplete by design
+
+The web UI shows `~XJ (estimated)` for local routes and `~XJ (laptop only; DC share not measured)` for cloud routes. The cloud number is *truthful but incomplete* — it captures laptop receive draw, not Anthropic's datacenter share, which we cannot measure. A reader who ignores the disclosure could conclude "cloud is greener" when the datacenter portion is just hidden, not zero.
+
+**Today:** Disclosure label flagged on every cloud response (`watts_complete: false` in the JSON). The `~` prefix on local numbers stays until calibration.
+**Next commit that fixes it:** A calibrated USB power meter on the laptop, per `CORE_SYNTHESIS.md` #9. Phase 0 task. Once that lands, the `~` drops on the local label and we can publish a per-token coefficient. The cloud datacenter share remains unmeasured because we don't have access to Anthropic's hardware.
+
+---
+
+## 3. Phone-side Ollama persistence
+
+**Status verified 2026-04-26**: a Pixel 9a running GrapheneOS, with Termux + Debian proot + Ollama + `llama3.2:1b`, serves inference end-to-end. Confirmed reply from `/api/generate`: `"response": "Hello."`, ~25s cold, ~8s warm. Real working portable Scatter.
+
+**Limitation**: `proot-distro login debian` uses `--kill-on-exit`, so the proot session terminates when its parent (an SSH session, in this case) disconnects. That kills `ollama serve` with it. The phone serves inference **only while an SSH session is actively holding the proot open**. It does not survive reboots, network drops, or user logout from Termux.
+
+**Why we shipped it anyway:** The phone use case in `CONFABULATORY_PHILOSOPHY.md` is *burst capable peer, not always-on server*. A child opens the phone offline, Scatter answers from local hardware, the inference works. That use case is satisfied as long as Scatter is *started* on the phone before use. It's not satisfied for the laptop-cluster spillover scenario where the laptop's router routes overflow to the phone — that needs persistence.
+
+**The cluster.json marker reflects this**: `pixel-9a` lives in `~/.scatter/cluster.json` with `role: "burst"`. The laptop's retry/fallback chain handles unreachable hosts gracefully — when ollama on the phone is down, the laptop just skips that worker and tries the next one.
+
+**Next commit that fixes it:**
+1. `pkg install termux-services` on the phone (Termux side, not proot)
+2. Write a runit service file that opens the proot and runs `OLLAMA_HOST=0.0.0.0:11434 ollama serve` — survives reboots
+3. Update `scripts/bootstrap-pixel-portable.sh` to set this up automatically
+4. Smoke test: power-cycle the phone, confirm ollama answers from the laptop within 60s of boot
+
+Estimated 30–45 min of work. Not a blocker for the offline-portable thesis, only for the cluster-spillover thesis.
+
+---
+
+## 4. Two-model verification not implemented
+
+`CORE_SYNTHESIS.md` #5 names two-model verification on every teach response as the safety floor. `CONFABULATORY_PHILOSOPHY.md` constraint 1 binds it as the way the model performs critique visibly.
+
+**Today:** `/chat` runs single-model inference (whichever route the classifier picks). No verification pass.
+**Next commit that fixes it:** Implement `/v1/teach/checkpoint` per `CORE_SYNTHESIS.md` D8. Model A generates the lesson, Model B verifies against the same retrieved citations, disagreement surfaces to the parent capability. Not the child.
+
+---
+
+## 5. The Machine Arguing pedagogy lives in DIALECTICAL_LOG.md as record, not as endpoint
+
+A user cannot today say to Scatter: "run a thesis/antithesis/synthesis cycle on this hypothesis I have." The pedagogy is documented but not callable.
+
+**Next commit that fixes it:** A `/v1/argue/request` endpoint accepting `{thesis, scope, models?}` and returning `{thesis, antithesis, synthesis, citations, dialectical_id}`. Antithesis is generated by the model with a system prompt that says "the critique is in your dataset; surface it." Every cycle writes to `~/.scatter/dialectical/<id>.json` so the journal grows. Named in `CONFABULATORY_PHILOSOPHY.md` as a future commitment.
+
+---
+
+## How this document is meant to be used
+
+When future-Claude or future-Ryann or a contributor proposes a commit that touches teaching, energy, telemetry, or routing, **read this doc first**. The five items above are the load-bearing constraints binding the next sprint. A commit that *closes* one of them moves Scatter forward. A commit that doesn't address any of them is fine if it's plumbing or polish, but should not be confused with progress on the alignment-OS thesis.
+
+The work for the night of 2026-04-26 was a *deletion-and-cleanup* sprint — phases 1–5 in the plan file `okay-debug-everything-i-velvety-deer.md`. It moved no items from this list to the closed column. That was deliberate. The next session is `/v1/teach/*`.
+
+— end of session, 2026-04-26
