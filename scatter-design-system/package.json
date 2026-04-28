@@ -1,0 +1,18 @@
+{
+  "name": "@scatter/shell",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared chrome for the Scatter suite — escape contract, design tokens, button spec.",
+  "main": "./index.ts",
+  "types": "./index.ts",
+  "files": [
+    "index.ts",
+    "EscapeContract.tsx",
+    "tokens.css",
+    "buttons.css",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "react": ">=19"
+  }
+}
