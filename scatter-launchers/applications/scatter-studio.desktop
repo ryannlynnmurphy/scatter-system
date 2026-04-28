@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Scatter Studio
+GenericName=Build by talking
+Comment=The brain of the Scatter ecosystem. Build things by talking.
+Exec=/home/ryannlynnmurphy/.local/bin/scatter-app studio 3010 /home/ryannlynnmurphy/projects/hazel/hzl-studio-os
+Icon=/home/ryannlynnmurphy/scatter-system/scatter-bar/icons/bowtie.png
+Terminal=false
+Categories=Development;
+StartupNotify=true
+StartupWMClass=Scatter-Studio

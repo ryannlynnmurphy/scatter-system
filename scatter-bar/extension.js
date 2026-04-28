@@ -95,22 +95,73 @@ function _writePins(pins) {
     }
 }
 
-// Each app carries a one-line "story" — what it does, why it earns its
-// pixel on the bar. Surfaced in the tooltip on hover so the apps reveal
-// reads as a guided tour, not a mystery grid of icons.
-const DEFAULT_APPS = [
-    { label: 'Scatter',      story: 'the canvas. say what you want to make.',                exec: 'bash -lc "$HOME/scatter-system/scatter-browser/launcher.sh"',                glyph: '>-<', brand: 'scatter-browser', icon_path: _icon('scatter-browser') },
-    { label: 'AppFlowy',     story: 'notes & docs that stay on this machine.',               exec: 'flatpak run io.appflowy.AppFlowy',                                           glyph: '[]',  brand: 'appflowy',        icon_path: _icon('appflowy') },
-    { label: 'OnlyOffice',   story: 'word, sheet, slides — without the cloud.',              exec: 'flatpak run org.onlyoffice.desktopeditors',                                  glyph: '|=|', brand: 'onlyoffice',      icon_path: _icon('onlyoffice') },
-    { label: 'Zotero',       story: 'every paper you read, indexed for you.',                exec: 'flatpak run org.zotero.Zotero',                                              glyph: '{ }', brand: 'zotero',          icon_path: _icon('zotero') },
-    { label: 'Files',        story: 'the folders. for when you want to look directly.',      exec: 'nautilus',                                                                   glyph: '[ ]', brand: 'files',           icon_path: _icon('files') },
-    { label: 'Scatter Code', story: 'a shell pointed at this OS. you can edit it.',          exec: 'gnome-terminal -- bash -lc "cd ~/scatter-system && exec bash"',              glyph: '</>', brand: 'scatter-code',    icon_path: _icon('scatter-code') },
-    { label: 'Claude Code',  story: 'cloud mind. for the hard problems.',                    exec: 'gnome-terminal -- bash -lc "claude || bash"',                                glyph: '[c]', brand: 'claude-code',     icon_path: _icon('claude-code') },
-    { label: 'Terminal',     story: 'the unix prompt. the developer’s own door.',       exec: 'gnome-terminal',                                                             glyph: ' _ ', brand: 'terminal',        icon_path: _icon('terminal') },
+// Scatter suite — the seven native surfaces. Default reveal shows only
+// these; everything else (system tools, FOSS, etc.) lives in Catalog
+// behind the ⊕ tile. The user's apps surface is Scatter; the world is
+// reachable but never the default. Per project_scatter_one_canvas.
+//
+// Each entry's exec resolves a .desktop in ~/.local/share/applications/
+// via gtk-launch — keeps args/icons/wm-class in one source of truth.
+const SUITE_APPS = [
+    { label: 'Schools', story: 'adaptive lessons, voiced by Scatter.',           exec: 'gtk-launch scatter-schools.desktop', glyph: '>-<', brand: 'schools', icon_path: _icon('bowtie') },
+    { label: 'Studio',  story: 'build things by talking. the brain.',            exec: 'gtk-launch scatter-studio.desktop',  glyph: '>-<', brand: 'studio',  icon_path: _icon('bowtie') },
+    { label: 'Music',   story: 'a daw built for writers, not producers.',        exec: 'gtk-launch scatter-music.desktop',   glyph: '>-<', brand: 'music',   icon_path: _icon('bowtie') },
+    { label: 'Write',   story: 'a distraction-free writing environment.',        exec: 'gtk-launch scatter-write.desktop',   glyph: '>-<', brand: 'write',   icon_path: _icon('bowtie') },
+    { label: 'Draft',   story: 'playwriting and scriptwriting, by a playwright.', exec: 'gtk-launch scatter-draft.desktop',   glyph: '>-<', brand: 'draft',   icon_path: _icon('bowtie') },
+    { label: 'Film',    story: 'screenwriter\'s editing — script to cut.',       exec: 'gtk-launch scatter-film.desktop',    glyph: '>-<', brand: 'film',    icon_path: _icon('bowtie') },
+    { label: 'Stream',  story: 'streaming for creative work, not gaming.',       exec: 'gtk-launch scatter-stream.desktop',  glyph: '>-<', brand: 'stream',  icon_path: _icon('bowtie') },
 ];
 
-const ALL_APPS_TILE = { label: 'All Apps', story: 'every app installed. pinned ones rise to the top.', exec: '__overview_apps', glyph: '###', brand: 'all-apps', icon_path: _icon('all-apps') };
-const HISTORY_TILE  = { label: 'History',  story: 'past conversations with scatter.',                  exec: '__history',       glyph: '···', brand: 'history',  icon_path: _icon('history') };
+// Slug → display metadata, used by the recents reader to render a tile
+// for each entry in ~/.config/scatter/recents.jsonl.
+const SUITE_BY_SLUG = Object.fromEntries(SUITE_APPS.map(a => [a.label.toLowerCase(), a]));
+
+// Control tiles — the corner column. Persistent affordances independent
+// of which apps Ryann has used recently.
+const CHAT_TILE     = { label: 'Chat',     story: 'past conversations with scatter.', exec: '__history',  glyph: '···', brand: 'history',  icon_path: _icon('history') };
+const SETTINGS_TILE = { label: 'Settings', story: 'system settings.',                 exec: '__settings', glyph: '@',   brand: 'settings', icon_path: _icon('gear') };
+const CATALOG_TILE  = { label: 'More',     story: 'every app: yours, scatter\'s, and the open-source world.', exec: '__catalog',  glyph: '+',   brand: 'catalog',  icon_path: _icon('all-apps') };
+
+// Recents log — appended by ~/.local/bin/scatter-app on every launch.
+// Format: one JSON line per launch, { app: <slug>, ts: <unix> }. Bar
+// reads on reveal-show and surfaces the last 5 unique apps.
+const RECENTS_FILE = GLib.build_filenamev([
+    GLib.get_user_config_dir(), 'scatter', 'recents.jsonl',
+]);
+
+function _readRecents(maxUnique = 5) {
+    try {
+        const file = Gio.File.new_for_path(RECENTS_FILE);
+        if (!file.query_exists(null)) return [];
+        const [ok, contents] = file.load_contents(null);
+        if (!ok) return [];
+        const text = new TextDecoder().decode(contents);
+        const lines = text.split('\n').filter(l => l.trim().length > 0);
+        // Walk newest-first, deduping by slug. Keep the most recent N.
+        const seen = new Set();
+        const out = [];
+        for (let i = lines.length - 1; i >= 0 && out.length < maxUnique; i--) {
+            try {
+                const e = JSON.parse(lines[i]);
+                const slug = (e.app || '').toLowerCase();
+                if (!slug || seen.has(slug)) continue;
+                const meta = SUITE_BY_SLUG[slug];
+                if (!meta) continue;        // Unknown app — skip.
+                seen.add(slug);
+                out.push({
+                    ...meta,
+                    label: meta.label,
+                    story: meta.story,
+                    brand: `recent-${meta.brand}`, // distinct CSS class for tinting
+                });
+            } catch (_) { /* skip malformed line */ }
+        }
+        return out;
+    } catch (e) {
+        log(`scatter-bar: recents read failed: ${e.message || e}`);
+        return [];
+    }
+}
 
 // Chat history persistence. Append-only NDJSON at ~/.config/scatter/chats.jsonl.
 // Each line: { ts: ISO8601, prompt, reply, route }. The journal is the truth;
@@ -152,10 +203,17 @@ function _readChats() {
     }
 }
 
-// Compose the live APPS list: defaults, then pins, then All Apps at the top.
+// Compose reveal sections. Three columns, each rendered bottom-up:
+//   recents : last 5 unique apps launched via ~/.local/bin/scatter-app
+//   suite   : the seven Scatter surfaces — the canonical app set
+//   controls: chat, settings, more (catalog)
+// Pins are kept (back-compat with anyone who already added pins) and
+// joined into the suite column so they don't disappear.
 function _buildApps() {
+    const recents = _readRecents(5);
     const pins = _readPins().map(p => ({
         label: p.label || 'pinned',
+        story: 'pinned by you.',
         exec: p.exec || '',
         desktop_id: p.desktop_id,
         icon_path: p.icon_path,
@@ -163,10 +221,19 @@ function _buildApps() {
         brand: 'pinned',
         pinned: true,
     }));
-    return [...DEFAULT_APPS, ...pins, HISTORY_TILE, ALL_APPS_TILE];
+    return {
+        recents,
+        suite:    [...SUITE_APPS, ...pins],
+        controls: [CHAT_TILE, SETTINGS_TILE, CATALOG_TILE],
+    };
 }
 
 let APPS = _buildApps();
+// Flat view for places that still want a single iterable (e.g. tooltip
+// lookup). Rebuilt whenever _buildApps runs.
+function _flatApps(sections) {
+    return [...sections.recents, ...sections.suite, ...sections.controls];
+}
 
 // Action-modality rules. Client-side first pass — zero-latency and doesn't
 // need the router for the common cases. Router handles everything else.
@@ -384,6 +451,86 @@ export default class ScatterBarExtension extends Extension {
 
     // ── Reveal layer: apps slide up above the bar, one by one ──────────
 
+    // Build one orb tile from an app spec. Used by _buildRevealLayer to
+    // populate each section column. Wires hover (magnify + tooltip),
+    // click (launch + signature animation), and the initial slide-up
+    // state (40px below, invisible — _showReveal animates them up).
+    _makeRevealTile(app) {
+        const item = new St.Button({
+            style_class: 'scatter-reveal-item',
+            can_focus: true,
+            track_hover: true,
+            reactive: true,
+        });
+        item.set_size(72, 72);
+        if (app.brand) item.add_style_class_name(`scatter-orb-${app.brand}`);
+
+        let iconChild = null;
+        if (app.pinned) {
+            iconChild = this._makeScatterGlyphIcon(app.label, 36);
+        }
+        if (!iconChild && app.desktop_id) {
+            try {
+                const info = Gio.DesktopAppInfo.new(app.desktop_id);
+                if (info) {
+                    const gicon = info.get_icon();
+                    if (gicon) {
+                        iconChild = new St.Icon({
+                            gicon,
+                            icon_size: 36,
+                            style_class: 'scatter-orb-icon',
+                        });
+                    }
+                }
+            } catch (_) { /* fall through */ }
+        }
+        if (!iconChild && app.icon_path) {
+            try {
+                const file = Gio.File.new_for_path(app.icon_path);
+                if (file.query_exists(null)) {
+                    iconChild = new St.Icon({
+                        gicon: new Gio.FileIcon({ file }),
+                        icon_size: 40,
+                        style_class: 'scatter-orb-icon',
+                    });
+                }
+            } catch (_) { /* fall through to glyph */ }
+        }
+        if (!iconChild) {
+            iconChild = new St.Label({
+                text: app.glyph || '·',
+                style_class: 'scatter-reveal-glyph',
+            });
+        }
+
+        const inner = new St.Bin({
+            style_class: 'scatter-orb-inner',
+            x_align: Clutter.ActorAlign.CENTER,
+            y_align: Clutter.ActorAlign.CENTER,
+            child: iconChild,
+        });
+        item.set_child(inner);
+
+        item.set_pivot_point(0.5, 1.0);
+        item.translation_y = 40;
+        item.opacity = 0;
+        item._armed = false;
+
+        item.connect('clicked', () => {
+            this._launchFromTile(item, app);
+        });
+        item.connect('enter-event', () => {
+            this._magnifyTile(item);
+            this._showTooltip(item, app.label, app.story);
+        });
+        item.connect('leave-event', () => {
+            this._settleTile(item);
+            this._hideTooltip();
+        });
+
+        return item;
+    }
+
     _buildRevealLayer() {
         // Apps reveal — a 2-column grid that grows UP-AND-TO-THE-RIGHT from
         // just above the bowtie. Was a single vertical column; that column
@@ -403,119 +550,38 @@ export default class ScatterBarExtension extends Extension {
         this._reveal.opacity = 0;
 
         this._revealItems = [];
-        APPS.forEach((app, i) => {
-            const item = new St.Button({
-                style_class: 'scatter-reveal-item',
-                can_focus: true,
-                track_hover: true,
-                reactive: true,
-            });
-            // Force the orb size via JS — CSS width/height alone gets eaten
-            // by the inherited shell theme, which is what made these render
-            // as narrow stadium pills instead of circles.
-            item.set_size(72, 72);
-            // Brand tint — one CSS class per app, per stylesheet.
-            if (app.brand) item.add_style_class_name(`scatter-orb-${app.brand}`);
 
-            // Pinned apps wear the generic Scatter glyph, not the vendor
-            // icon — keeps the bar reading as one register with the library.
-            // The eight hand-crafted defaults stay with their bespoke pixel
-            // art (icon_path branch below).
-            let iconChild = null;
-            if (app.pinned) {
-                iconChild = this._makeScatterGlyphIcon(app.label, 36);
-            }
-            if (!iconChild && app.desktop_id) {
-                try {
-                    const info = Gio.DesktopAppInfo.new(app.desktop_id);
-                    if (info) {
-                        const gicon = info.get_icon();
-                        if (gicon) {
-                            iconChild = new St.Icon({
-                                gicon,
-                                icon_size: 36,
-                                style_class: 'scatter-orb-icon',
-                            });
-                        }
-                    }
-                } catch (_) { /* fall through */ }
-            }
-            // Direct file fallback — used when XDG_DATA_DIRS doesn't include
-            // flatpak's exports (gnome-shell started before flatpak install).
-            if (!iconChild && app.icon_path) {
-                try {
-                    const file = Gio.File.new_for_path(app.icon_path);
-                    if (file.query_exists(null)) {
-                        iconChild = new St.Icon({
-                            gicon: new Gio.FileIcon({ file }),
-                            icon_size: 40,
-                            style_class: 'scatter-orb-icon',
-                        });
-                    }
-                } catch (_) { /* fall through to glyph */ }
-            }
-            if (!iconChild) {
-                iconChild = new St.Label({
-                    text: app.glyph,
-                    style_class: 'scatter-reveal-glyph',
-                });
-            }
+        // Three columns growing right from the bowtie:
+        //   recents → suite → controls
+        // Each column reads bottom-up (closest-to-bowtie tile first), so
+        // the user's most recent app sits at the base of the leftmost
+        // column and the catalog/⊕ tile sits at the base of the rightmost.
+        // Columns with zero items (e.g. no recents on first run) collapse
+        // out so the reveal stays anchored low-left.
+        const sections = [
+            { key: 'recents',  items: APPS.recents },
+            { key: 'suite',    items: APPS.suite },
+            { key: 'controls', items: APPS.controls },
+        ];
 
-            const inner = new St.Bin({
-                style_class: 'scatter-orb-inner',
-                x_align: Clutter.ActorAlign.CENTER,
-                y_align: Clutter.ActorAlign.CENTER,
-                child: iconChild,
+        sections.forEach(section => {
+            if (!section.items.length) return;
+            const col = new St.BoxLayout({
+                style_class: `scatter-reveal-col scatter-reveal-col-${section.key}`,
+                vertical: true,
+                reactive: false,
             });
-            item.set_child(inner);
-
-            // Initial state: 40px below final position, invisible. Apps
-            // ascend from the face — bottom-of-column emerges first, the
-            // column pours upward out of the bowtie's side.
-            item.set_pivot_point(0.5, 1.0);
-            item.translation_y = 40;
-            item.opacity = 0;
-            item._armed = false;
-
-            item.connect('clicked', () => {
-                this._launchFromTile(item, app);
-            });
-            item.connect('enter-event', () => {
-                this._magnifyTile(item);
-                this._showTooltip(item, app.label, app.story);
-            });
-            item.connect('leave-event', () => {
-                this._settleTile(item);
-                this._hideTooltip();
-            });
-
-            this._revealItems.push(item);
+            // Bottom-up: build the items array in display order (top → bottom),
+            // then add to the BoxLayout in reverse so the first item lands at
+            // the bottom of the column (closest to the bowtie).
+            const tiles = section.items.map(app => this._makeRevealTile(app));
+            this._revealItems.push(...tiles);
+            [...tiles].reverse().forEach(t => col.add_child(t));
+            this._reveal.add_child(col);
         });
 
         // Tooltip is created once (not recreated on rebuild) — see _ensureTooltip.
         this._ensureTooltip();
-
-        // Single column above the bowtie — apps stack straight up, never
-        // wrapping right. Two-column layout had column 2 floating directly
-        // above the entry capsule, which read as a stacked cluster in the
-        // lower-left. One column gives the bowtie / apps / entry three
-        // distinct zones: corner, ascending stack, rightward rail.
-        const REVEAL_ROWS = this._revealItems.length;
-        for (let c = 0; c * REVEAL_ROWS < this._revealItems.length; c++) {
-            const col = new St.BoxLayout({
-                style_class: 'scatter-reveal-col',
-                vertical: true,
-                reactive: false,
-            });
-            const colItems = this._revealItems.slice(
-                c * REVEAL_ROWS,
-                (c + 1) * REVEAL_ROWS,
-            );
-            // Reverse within the column so index 0 of this slice is at the
-            // bottom (closest to the bowtie / closest to the bar).
-            [...colItems].reverse().forEach(item => col.add_child(item));
-            this._reveal.add_child(col);
-        }
 
         Main.layoutManager.addChrome(this._reveal, {
             affectsInputRegion: true,
@@ -832,6 +898,15 @@ export default class ScatterBarExtension extends Extension {
         // Bowtie click → face opens. Apps rise on the left in a staggered
         // column; the entry capsule slides out to the right and takes
         // focus so the user can speak immediately.
+        //
+        // Refresh APPS first so the recents column reflects whatever has
+        // been launched since the bar last built. Cheap (one file read,
+        // last-N parse) and keeps the bar honest about "last 5 used."
+        const newApps = _buildApps();
+        const recentsChanged = JSON.stringify(newApps.recents.map(r => r.label))
+            !== JSON.stringify(APPS.recents.map(r => r.label));
+        APPS = newApps;
+        if (recentsChanged) this._rebuildRevealLayer();
         this._cancelHideTimer();
         this._revealShown = true;
         if (this._reveal) {
@@ -1251,7 +1326,13 @@ export default class ScatterBarExtension extends Extension {
             // toward it on shorter monitors so MIN_ORB orbs still fit.
             const APPS_GAP_PREFERRED = 140;
             const APPS_GAP_MIN = 56;
-            const N = APPS.length;
+            // N drives column-sizing — we size for the tallest column so
+            // every section fits within available height.
+            const N = Math.max(
+                APPS.recents.length,
+                APPS.suite.length,
+                APPS.controls.length,
+            ) || 1;
             const NATURAL_ORB = 72;
             const NATURAL_GAP = 24;
             const MIN_ORB = 44;
@@ -1659,6 +1740,35 @@ export default class ScatterBarExtension extends Extension {
         }
         if (cmd === '__history') {
             this._showHistory();
+            return;
+        }
+        if (cmd === '__settings') {
+            // Gear → system settings. gnome-control-center is the obvious
+            // first stop; Scatter's own settings surface (when it exists)
+            // can override this sentinel later.
+            try {
+                GLib.spawn_command_line_async('gnome-control-center');
+            } catch (e) {
+                this._showResponse('error', `could not open settings: ${e.message || e}`);
+            }
+            return;
+        }
+        if (cmd === '__catalog') {
+            // ⊕ → Scatter Catalog. Phase 2 ships this surface as a real app
+            // with Suite/Mine/World tabs. Until its .desktop lands, fall
+            // back to the legacy library view so the click is never a dead
+            // end. Probe by file existence — cheaper than spawning.
+            const xdgData = GLib.get_user_data_dir();
+            const desktopPath = GLib.build_filenamev([
+                xdgData, 'applications', 'scatter-catalog.desktop',
+            ]);
+            const desktopFile = Gio.File.new_for_path(desktopPath);
+            if (desktopFile.query_exists(null)) {
+                try { GLib.spawn_command_line_async('gtk-launch scatter-catalog.desktop'); }
+                catch (e) { this._showResponse('error', `could not open catalog: ${e.message || e}`); }
+            } else {
+                this._showLibrary();
+            }
             return;
         }
         try {

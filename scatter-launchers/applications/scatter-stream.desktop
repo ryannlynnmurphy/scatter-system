@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Scatter Stream
+GenericName=Stream production
+Comment=Stream production tool designed around creative work.
+Exec=/home/ryannlynnmurphy/.local/bin/scatter-app stream 3060 /home/ryannlynnmurphy/projects/hazel/hzl-stream
+Icon=/home/ryannlynnmurphy/scatter-system/scatter-bar/icons/bowtie.png
+Terminal=false
+Categories=AudioVideo;
+StartupNotify=true
+StartupWMClass=Scatter-Stream

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Scatter Write
+GenericName=Writing
+Comment=A distraction-free writing environment built by a writer for writers.
+Exec=/home/ryannlynnmurphy/.local/bin/scatter-app write 3030 /home/ryannlynnmurphy/projects/hazel/hzl-write
+Icon=/home/ryannlynnmurphy/scatter-system/scatter-bar/icons/bowtie.png
+Terminal=false
+Categories=Office;WordProcessor;
+StartupNotify=true
+StartupWMClass=Scatter-Write

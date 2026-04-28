@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# scatter-app — launcher for any Scatter-suite app.
+#
+# Usage: scatter-app <slug> <port> <project-dir> [<dev-cmd>]
+#
+#   slug         e.g. schools, studio, music, write, draft, film, stream
+#   port         e.g. 3000
+#   project-dir  absolute path to the app's source directory
+#   dev-cmd      optional; defaults to 'npx next dev -p <port>'.
+#                Schools overrides this with its node-http server.
+#
+# What it does:
+#   1. Records the launch in ~/.config/scatter/recents.jsonl so the bar
+#      can show the last 5 apps used.
+#   2. If the dev server isn't already listening on <port>, starts it in
+#      the background and waits up to 30s for it to come up.
+#   3. Opens the URL in chromium-browser --app=URL with a per-app
+#      --user-data-dir and --class so the window has its own dock entry,
+#      no tabs, no URL bar — feels native. Falls back to firefox
+#      --new-window if chromium isn't usable.
+#
+# Each surface stays one process per port; relaunching a running app
+# just opens a fresh window against the same dev server.
+
+set -u
+
+SLUG="${1:?slug required}"
+PORT="${2:?port required}"
+DIR="${3:?project-dir required}"
+DEV_CMD="${4:-npx next dev -p $PORT}"
+
+NAME="${SLUG^}"   # capitalize first letter for window class
+URL="http://localhost:${PORT}"
+
+CONFIG_DIR="$HOME/.config/scatter"
+LOGS_DIR="$CONFIG_DIR/logs"
+RECENTS="$CONFIG_DIR/recents.jsonl"
+USERDATA="$CONFIG_DIR/app-data/$SLUG"
+mkdir -p "$LOGS_DIR" "$USERDATA"
+
+# ── 1. Record the launch ────────────────────────────────────────────────
+TS=$(date +%s)
+printf '{"app":"%s","ts":%d}\n' "$SLUG" "$TS" >> "$RECENTS"
+
+# ── 2. Start dev server if not running ──────────────────────────────────
+port_is_listening() {
+  ss -tln 2>/dev/null | awk '{print $4}' | grep -qE "(^|:)${PORT}\$"
+}
+
+if ! port_is_listening; then
+  # Use the same nvm Node the rest of Scatter uses.
+  NODE_BIN="$HOME/.nvm/versions/node/v22.22.2/bin"
+  export PATH="$NODE_BIN:$PATH"
+
+  LOG="$LOGS_DIR/$SLUG.log"
+  echo "--- $(date) launching $SLUG on $PORT ---" >> "$LOG"
+  ( cd "$DIR" && PORT="$PORT" nohup bash -c "$DEV_CMD" >> "$LOG" 2>&1 & )
+
+  # Wait for the server (max 30s, polling every 0.5s).
+  for _ in $(seq 1 60); do
+    if port_is_listening; then break; fi
+    sleep 0.5
+  done
+
+  if ! port_is_listening; then
+    notify-send -u critical "Scatter ${NAME}" "Server didn't start on port ${PORT}. Check $LOG." 2>/dev/null
+    exit 1
+  fi
+fi
+
+# ── 3. Open in app-mode ─────────────────────────────────────────────────
+# chromium-browser is the snap on this machine; --app= drops the chrome
+# (tabs, URL bar) and --class= lets the window manager group launches by
+# this app. --user-data-dir gives each Scatter app its own browser
+# session so login state, cookies, etc. don't bleed between Studio /
+# Music / Schools / etc.
+WM_CLASS="Scatter-${NAME}"
+
+if command -v chromium-browser >/dev/null 2>&1; then
+  exec chromium-browser \
+    --app="$URL" \
+    --user-data-dir="$USERDATA" \
+    --class="$WM_CLASS" \
+    --no-default-browser-check \
+    --no-first-run
+elif command -v chromium >/dev/null 2>&1; then
+  exec chromium \
+    --app="$URL" \
+    --user-data-dir="$USERDATA" \
+    --class="$WM_CLASS" \
+    --no-default-browser-check \
+    --no-first-run
+elif command -v firefox >/dev/null 2>&1; then
+  # Firefox has no real --app= mode. --new-window opens a regular window
+  # with chrome; not as clean but it works.
+  exec firefox --new-window "$URL"
+else
+  notify-send -u critical "Scatter ${NAME}" "No browser available." 2>/dev/null
+  exit 1
+fi

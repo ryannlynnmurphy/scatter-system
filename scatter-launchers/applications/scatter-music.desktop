@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Scatter Music
+GenericName=Composition
+Comment=A DAW-style composition environment built for writers.
+Exec=/home/ryannlynnmurphy/.local/bin/scatter-app music 3020 /home/ryannlynnmurphy/projects/hazel/hzl-music
+Icon=/home/ryannlynnmurphy/scatter-system/scatter-bar/icons/bowtie.png
+Terminal=false
+Categories=AudioVideo;Audio;
+StartupNotify=true
+StartupWMClass=Scatter-Music
