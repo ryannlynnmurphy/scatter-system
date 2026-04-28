@@ -248,6 +248,28 @@ def _gallery():
     return g
 
 
+_PROJECTS_MOD = None
+
+
+def _projects():
+    """Lazy-load scatter/projects.py — same package/standalone fallback."""
+    global _PROJECTS_MOD
+    if _PROJECTS_MOD is not None:
+        return _PROJECTS_MOD
+    try:
+        from . import projects as p  # type: ignore
+    except Exception:
+        import importlib.util as _iu
+        _path = os.path.join(os.path.dirname(__file__), "projects.py")
+        _spec = _iu.spec_from_file_location("scatter_projects", _path)
+        p = _iu.module_from_spec(_spec)
+        # @dataclass introspects sys.modules[cls.__module__]; register before exec.
+        sys.modules["scatter_projects"] = p
+        _spec.loader.exec_module(p)
+    _PROJECTS_MOD = p
+    return p
+
+
 def _save_to_gallery(subtype, prompt, html, session_id):
     """Best-effort gallery save. Never fails the request — a disk-full or
     permissions hiccup must not turn a good build into an error response.
@@ -618,6 +640,22 @@ class StudioHandler(http.server.BaseHTTPRequestHandler):
             })
         elif self.path.startswith("/api/profile"):
             self.send_json({"profile": sc.profile()})
+        elif self.path.startswith("/api/tools"):
+            # Creative tool catalog. ?all=1 includes uninstalled entries with installed:false.
+            include_all, = self._parse_query(["all"])
+            if include_all == "1":
+                self.send_json({"tools": _projects().all_tools()})
+            else:
+                self.send_json({"tools": _projects().installed_tools()})
+        elif self.path == "/api/projects" or self.path.startswith("/api/projects?"):
+            self.send_json({"projects": _projects().list_projects()})
+        elif self.path.startswith("/api/projects/"):
+            slug = self.path[len("/api/projects/"):].split("?", 1)[0].split("/", 1)[0]
+            project = _projects().load_project(slug)
+            if project is None:
+                self.send_json({"error": "Project not found."}, status=404)
+            else:
+                self.send_json({"project": project})
         else:
             self.send_response(404)
             self.end_headers()
@@ -944,6 +982,67 @@ class StudioHandler(http.server.BaseHTTPRequestHandler):
             sc.forget(target_id, reason=reason)
             sc.journal_append("forget_requested", target_id=target_id, reason=reason)
             self.send_json({"status": "ok", "forgot": target_id})
+        elif self.path == "/api/projects":
+            # Create a project. Body: {"name": "..."}.
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length) if content_length else b"{}"
+            try:
+                data = json.loads(body)
+            except json.JSONDecodeError:
+                self.send_json({"error": "invalid json"}, status=400)
+                return
+            name = (data.get("name") or "").strip()
+            if not name:
+                self.send_json({"error": "name required"}, status=400)
+                return
+            try:
+                project = _projects().create_project(name)
+            except FileExistsError as e:
+                self.send_json({"error": str(e)}, status=409)
+                return
+            except ValueError as e:
+                self.send_json({"error": str(e)}, status=400)
+                return
+            sc.journal_append(
+                "project_created",
+                slug=project["manifest"]["slug"],
+                name=project["manifest"]["name"],
+            )
+            self.send_json({"project": project})
+        elif self.path == "/api/launch":
+            # Spawn a creative tool, optionally with a project file path.
+            # Body: {"tool": "...", "project": "<slug>"?}
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length) if content_length else b"{}"
+            try:
+                data = json.loads(body)
+            except json.JSONDecodeError:
+                self.send_json({"error": "invalid json"}, status=400)
+                return
+            tool_id = (data.get("tool") or "").strip()
+            slug = (data.get("project") or "").strip() or None
+            if not tool_id:
+                self.send_json({"error": "tool required"}, status=400)
+                return
+            projects = _projects()
+            resolved = projects.resolve_launch_args(tool_id, slug)
+            if resolved is None:
+                self.send_json(
+                    {"error": f"unknown tool or binary not on PATH: {tool_id}"},
+                    status=422,
+                )
+                return
+            argv, opened = resolved
+            if not projects.spawn(argv):
+                self.send_json({"error": "spawn failed"}, status=500)
+                return
+            sc.journal_append(
+                "tool_launched",
+                tool=tool_id,
+                project=slug or "",
+                opened=opened or "",
+            )
+            self.send_json({"ok": True, "tool": tool_id, "openedFile": opened})
         else:
             self.send_response(404)
             self.end_headers()
