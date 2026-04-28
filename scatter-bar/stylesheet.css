@@ -467,6 +467,57 @@
 }
 .scatter-orb-terminal .scatter-reveal-glyph { color: #4ade80; }
 
+/* ── Suite orbs — per-app rings matching the pixel-art icon primary ── */
+
+/* Schools — paper-white. Lessons live on pages. */
+.scatter-orb-schools         { border-color: rgba(245, 242, 234, 0.30); }
+.scatter-orb-schools:hover   { border-color: rgba(245, 242, 234, 0.85);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55),
+                0 0 0 2px rgba(245, 242, 234, 0.45); }
+.scatter-orb-schools .scatter-reveal-glyph { color: #f5f2ea; }
+
+/* Studio — Scatter green. The brain. */
+.scatter-orb-studio          { border-color: rgba(74, 222, 128, 0.30); }
+.scatter-orb-studio:hover    { border-color: rgba(74, 222, 128, 0.85);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55),
+                0 0 0 2px rgba(74, 222, 128, 0.45); }
+.scatter-orb-studio .scatter-reveal-glyph { color: #4ade80; }
+
+/* Music — violet. Sustained tone. */
+.scatter-orb-music           { border-color: rgba(180, 140, 240, 0.30); }
+.scatter-orb-music:hover     { border-color: rgba(180, 140, 240, 0.85);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55),
+                0 0 0 2px rgba(180, 140, 240, 0.45); }
+.scatter-orb-music .scatter-reveal-glyph { color: #b48cf0; }
+
+/* Write — warm paper. Page in lamplight. */
+.scatter-orb-write           { border-color: rgba(220, 215, 198, 0.30); }
+.scatter-orb-write:hover     { border-color: rgba(220, 215, 198, 0.85);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55),
+                0 0 0 2px rgba(220, 215, 198, 0.45); }
+.scatter-orb-write .scatter-reveal-glyph { color: #dcd7c6; }
+
+/* Draft — amber. Stage spotlight on a playwright's desk. */
+.scatter-orb-draft           { border-color: rgba(255, 184, 0, 0.30); }
+.scatter-orb-draft:hover     { border-color: rgba(255, 184, 0, 0.85);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55),
+                0 0 0 2px rgba(255, 184, 0, 0.50); }
+.scatter-orb-draft .scatter-reveal-glyph { color: #ffb800; }
+
+/* Film — cool blue. Projector beam in a dark room. */
+.scatter-orb-film            { border-color: rgba(106, 140, 170, 0.30); }
+.scatter-orb-film:hover      { border-color: rgba(106, 140, 170, 0.85);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55),
+                0 0 0 2px rgba(106, 140, 170, 0.45); }
+.scatter-orb-film .scatter-reveal-glyph { color: #6a8caa; }
+
+/* Stream — coral. The on-air light. */
+.scatter-orb-stream          { border-color: rgba(210, 80, 90, 0.30); }
+.scatter-orb-stream:hover    { border-color: rgba(210, 80, 90, 0.85);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55),
+                0 0 0 2px rgba(210, 80, 90, 0.45); }
+.scatter-orb-stream .scatter-reveal-glyph { color: #d2505a; }
+
 /* Firefox leap — satellite ember and impact shockwave. */
 .scatter-ember {
     background-color: #ffb800;
@@ -519,16 +570,16 @@
  * read as one conversation, not two surfaces. Sharp green frame, soft
  * green halo. The pivot is bottom-left so it scales out of the bowtie. */
 .scatter-desktop-bubble {
-    background-color: rgba(8, 10, 9, 0.95);
-    border: 2px solid rgba(74, 222, 128, 0.55);
-    border-radius: 2px;
-    padding: 10px 14px;
-    spacing: 2px;
-    box-shadow: 0 0 22px rgba(74, 222, 128, 0.35);
+    background-color: rgba(28, 28, 28, 0.90);
+    border: none;
+    border-radius: 18px;
+    padding: 14px 20px;
+    spacing: 4px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
 }
 
 .scatter-desktop-row {
-    spacing: 8px;
+    spacing: 10px;
 }
 
 .scatter-desktop-text {
@@ -537,25 +588,25 @@
     font-weight: 400;
     color: #f5f2ea;
     letter-spacing: 0.02em;
-    line-height: 1.4;
+    line-height: 1.45;
 }
 
 .scatter-desktop-close {
     font-family: "JetBrains Mono";
-    font-size: 12px;
+    font-size: 16px;
     font-weight: 400;
-    color: #4ade80;
+    color: rgba(245, 242, 234, 0.55);
     background-color: transparent;
     background-gradient-direction: none;
     border: none;
-    border-radius: 0;
-    padding: 0 2px;
-    min-width: 16px;
-    min-height: 16px;
+    border-radius: 12px;
+    padding: 0 6px;
+    min-width: 24px;
+    min-height: 24px;
 }
 .scatter-desktop-close:hover {
     color: #f5f2ea;
-    background-color: transparent;
+    background-color: rgba(245, 242, 234, 0.10);
 }
 
 .scatter-desktop-trail {
@@ -563,6 +614,6 @@
     font-size: 9px;
     font-weight: 400;
     letter-spacing: 0.08em;
-    color: #2f6b3d;
-    padding-top: 2px;
+    color: rgba(245, 242, 234, 0.40);
+    padding-top: 4px;
 }

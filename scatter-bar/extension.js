@@ -103,13 +103,13 @@ function _writePins(pins) {
 // Each entry's exec resolves a .desktop in ~/.local/share/applications/
 // via gtk-launch — keeps args/icons/wm-class in one source of truth.
 const SUITE_APPS = [
-    { label: 'Schools', story: 'adaptive lessons, voiced by Scatter.',           exec: 'gtk-launch scatter-schools.desktop', glyph: '>-<', brand: 'schools', icon_path: _icon('bowtie') },
-    { label: 'Studio',  story: 'build things by talking. the brain.',            exec: 'gtk-launch scatter-studio.desktop',  glyph: '>-<', brand: 'studio',  icon_path: _icon('bowtie') },
-    { label: 'Music',   story: 'a daw built for writers, not producers.',        exec: 'gtk-launch scatter-music.desktop',   glyph: '>-<', brand: 'music',   icon_path: _icon('bowtie') },
-    { label: 'Write',   story: 'a distraction-free writing environment.',        exec: 'gtk-launch scatter-write.desktop',   glyph: '>-<', brand: 'write',   icon_path: _icon('bowtie') },
-    { label: 'Draft',   story: 'playwriting and scriptwriting, by a playwright.', exec: 'gtk-launch scatter-draft.desktop',   glyph: '>-<', brand: 'draft',   icon_path: _icon('bowtie') },
-    { label: 'Film',    story: 'screenwriter\'s editing — script to cut.',       exec: 'gtk-launch scatter-film.desktop',    glyph: '>-<', brand: 'film',    icon_path: _icon('bowtie') },
-    { label: 'Stream',  story: 'streaming for creative work, not gaming.',       exec: 'gtk-launch scatter-stream.desktop',  glyph: '>-<', brand: 'stream',  icon_path: _icon('bowtie') },
+    { label: 'Schools', story: 'adaptive lessons, voiced by Scatter.',           exec: 'gtk-launch scatter-schools.desktop', glyph: '>-<', brand: 'schools', icon_path: _icon('schools') },
+    { label: 'Studio',  story: 'build things by talking. the brain.',            exec: 'gtk-launch scatter-studio.desktop',  glyph: '>-<', brand: 'studio',  icon_path: _icon('studio') },
+    { label: 'Music',   story: 'a daw built for writers, not producers.',        exec: 'gtk-launch scatter-music.desktop',   glyph: '>-<', brand: 'music',   icon_path: _icon('music') },
+    { label: 'Write',   story: 'a distraction-free writing environment.',        exec: 'gtk-launch scatter-write.desktop',   glyph: '>-<', brand: 'write',   icon_path: _icon('write') },
+    { label: 'Draft',   story: 'playwriting and scriptwriting, by a playwright.', exec: 'gtk-launch scatter-draft.desktop',   glyph: '>-<', brand: 'draft',   icon_path: _icon('draft') },
+    { label: 'Film',    story: 'screenwriter\'s editing — script to cut.',       exec: 'gtk-launch scatter-film.desktop',    glyph: '>-<', brand: 'film',    icon_path: _icon('film') },
+    { label: 'Stream',  story: 'streaming for creative work, not gaming.',       exec: 'gtk-launch scatter-stream.desktop',  glyph: '>-<', brand: 'stream',  icon_path: _icon('stream') },
 ];
 
 // Slug → display metadata, used by the recents reader to render a tile
@@ -874,11 +874,25 @@ export default class ScatterBarExtension extends Extension {
         const [tx, ty] = tile.get_transformed_position();
         const [tw, th] = [tile.width, tile.height];
         this._tooltip.visible = true;
+        // Raise above the reveal layer. Reveal is re-added to chrome on every
+        // recents change, which pushes it above the (older) tooltip in the
+        // chrome stack — without this, tile names render behind the next
+        // column's orbs and Settings/Chats blur into the rest of the grid.
+        const tParent = this._tooltip.get_parent();
+        if (tParent) tParent.set_child_above_sibling(this._tooltip, null);
         // Force a layout pass so we know the tooltip's natural width.
         const [, natWidth] = this._tooltip.get_preferred_width(-1);
         const [, natHeight] = this._tooltip.get_preferred_height(natWidth);
+        // Default placement is to the right of the tile. If that runs the
+        // tooltip past the right edge of the monitor, flip it to the left
+        // so the label always lands fully on-screen and in front.
+        const monitor = Main.layoutManager.primaryMonitor;
+        let tipX = tx + tw + 16;
+        if (monitor && tipX + natWidth > monitor.x + monitor.width - 12) {
+            tipX = Math.max(monitor.x + 12, tx - natWidth - 16);
+        }
         this._tooltip.set_position(
-            tx + tw + 16,
+            tipX,
             ty + Math.floor((th - natHeight) / 2),
         );
         this._tooltip.ease({
@@ -1140,22 +1154,14 @@ export default class ScatterBarExtension extends Extension {
         const monitor = Main.layoutManager.primaryMonitor;
         if (!monitor) return;
 
-        const PADDING_X = 28;        // CSS horizontal padding (~14×2)
-        const PADDING_CLOSE = 26;    // × button + row spacing
+        const PADDING_X = 40;        // CSS horizontal padding (20×2)
+        const PADDING_CLOSE = 30;    // × button + row spacing
         const MAX_W = Math.min(440, Math.floor(monitor.width * 0.40));
         const MAX_INNER = MAX_W - PADDING_X - PADDING_CLOSE;
 
         const trail = this._formatTrail(meta || {});
         this._desktopTrail.set_text(trail);
         this._desktopTrail.visible = trail.length > 0;
-
-        // SMOKE TEST: red bubble for long messages, green for short. If the
-        // user never sees red, _showDesktop isn't being called at all.
-        if (text.length > 30) {
-            this._desktop.set_style('background-color: rgba(120, 20, 20, 0.95); border: 2px solid #ff6b6b;');
-        } else {
-            this._desktop.set_style(''); // revert to stylesheet
-        }
 
         // Step 1+2: set text and wrap configuration.
         this._desktopText.set_text(text);
@@ -1181,17 +1187,18 @@ export default class ScatterBarExtension extends Extension {
         const bubbleWidth = Math.max(120, wrappedTextW + PADDING_X + PADDING_CLOSE);
         this._desktop.set_size(bubbleWidth, -1);
 
-        // Step 5: position. Bottom-left of bubble lands just above and to the
-        // right of the bowtie — that's the emergence anchor and animation pivot.
+        // Step 5: position. Bubble emerges from the dash of `>-<`. Bottom-left
+        // anchored at the dash so it grows up-and-right; dash sits at the
+        // center of the face. Vertical gap keeps the bubble clear of the face.
         const [, bubbleHeight] = this._desktop.get_preferred_height(bubbleWidth);
-        // Anchor to the floating face. Bowtie sits at (monitor.x + 24, …)
-        // with width 124 and a 24px corner gap from the bottom edge.
         const FACE_W = 124;
         const FACE_H = 64;
-        const CORNER_PAD = 24;
+        const CORNER_PAD = 40;        // matches face placement (_place)
+        const FACE_GAP = 14;          // breathing room above the bowtie
         const faceX = monitor.x + CORNER_PAD;
         const faceTop = monitor.y + monitor.height - FACE_H - CORNER_PAD;
-        this._desktop.set_position(faceX + FACE_W + 12, faceTop - bubbleHeight - 8);
+        const dashX = faceX + Math.round(FACE_W / 2);
+        this._desktop.set_position(dashX - 8, faceTop - bubbleHeight - FACE_GAP);
         this._desktop.set_pivot_point(0.0, 1.0);
 
         const dbg = `scatter-bar:bubble len=${text.length} pango.w=${logical.width}`
