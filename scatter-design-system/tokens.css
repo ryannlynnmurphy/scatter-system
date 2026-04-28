@@ -4,22 +4,40 @@
  * Every Scatter surface (shell extension, web UIs, app chrome) must reference
  * these values. When a token changes here, every surface must be updated.
  *
+ * Palette: green-primary, black canvas, white text, amber sparing.
+ * Green is the iconic accent — used wherever the user is meant to act, focus,
+ * or perceive Scatter's voice. Amber is the rare accent — reserved for the
+ * watts indicator, the "this is estimated" mark, and one-time alerts. White
+ * is the body text color (tinted near-white, not pure). No gold, no cream.
+ *
  * Copy into GNOME Shell extension stylesheets as inline values — GNOME Shell
  * CSS does not support @import or :root variables reliably.
  */
 
 :root {
     /* ── Palette ──────────────────────────────────────────────────────── */
-    --scatter-black:       #0a0a0a;   /* true black, reserved for bar + boot */
-    --scatter-ink:         #121212;   /* near-black body surface */
-    --scatter-graphite:    #1a1a1a;   /* elevated surface */
-    --scatter-slate:       #2a2a2a;   /* borders, dividers */
-    --scatter-quiet:       #5a5a5a;   /* low-emphasis text */
-    --scatter-body:        #c8c8c8;   /* body text, not pure white */
-    --scatter-bright:      #e5e5e5;   /* emphasis text */
-    --scatter-bone:        #f5f2ea;   /* paper-white, used sparingly */
+    --scatter-black:       #0a0a0a;   /* true black — page bg */
+    --scatter-ink:         #0f0f0f;   /* near-black surface */
+    --scatter-graphite:    #161616;   /* elevated surface (cards, panels) */
+    --scatter-slate:       #1f1f1f;   /* secondary surface */
+    --scatter-quiet:       #6a6a6a;   /* low-emphasis text */
+    --scatter-body:        #d4d4d4;   /* body text, not pure white */
+    --scatter-bright:      #f5f5f5;   /* emphasis text, headings */
+    --scatter-bone:        #fafafa;   /* near-white, used sparingly for full-paper surfaces */
 
-    --scatter-amber:       #ffb800;   /* iconic accent — used once per surface */
+    /* Green — iconic accent. Used for primary actions, project labels, the
+     * Scatter voice. Bright but readable; this is the matrix-green Music has
+     * been using since Phase 0, now suite-wide. */
+    --scatter-green:        #00ff88;
+    --scatter-green-bright: #6fffa8;
+    --scatter-green-dim:    #00b860;
+    --scatter-green-deep:   #007a3d;
+    --scatter-green-wash:   rgba(0, 255, 136, 0.08);
+    --scatter-green-edge:   rgba(0, 255, 136, 0.30);
+
+    /* Amber — rare accent. Used sparingly: watts indicator, "estimated"
+     * marks, alerts. Never the primary action color. */
+    --scatter-amber:       #ffb800;
     --scatter-amber-dim:   #8a6200;
     --scatter-amber-wash:  rgba(255, 184, 0, 0.08);
 
@@ -36,18 +54,18 @@
     --scatter-mono:        'JetBrains Mono', 'Victor Mono', monospace;
     --scatter-glyph:       'JetBrains Mono', 'Victor Mono', monospace;
 
-    --scatter-type-xs:     10px;   /* labels, route badges */
-    --scatter-type-sm:     12px;   /* captions */
-    --scatter-type-base:   14px;   /* body, bar input */
+    --scatter-type-xs:     10px;
+    --scatter-type-sm:     12px;
+    --scatter-type-base:   14px;
     --scatter-type-md:     16px;
     --scatter-type-lg:     22px;
     --scatter-type-xl:     36px;
     --scatter-type-display: 64px;
 
-    --scatter-track-tight:    -0.01em;
-    --scatter-track-body:      0;
-    --scatter-track-caps:      0.08em;
-    --scatter-track-wide:      0.16em;
+    --scatter-track-tight: -0.01em;
+    --scatter-track-body:   0;
+    --scatter-track-caps:   0.08em;
+    --scatter-track-wide:   0.16em;
 
     /* ── Spacing (4px baseline) ───────────────────────────────────────── */
     --scatter-s-1:   4px;
@@ -60,17 +78,15 @@
     --scatter-s-8:   64px;
 
     /* ── Radius ───────────────────────────────────────────────────────── */
-    /* Scatter uses two radii. No rounded-everything. */
-    --scatter-radius-sharp:  0px;    /* default — editorial, not ornamental */
-    --scatter-radius-soft:   2px;    /* inputs and pickable objects only */
+    --scatter-radius-sharp:  0px;
+    --scatter-radius-soft:   2px;
 
     /* ── Borders ──────────────────────────────────────────────────────── */
     --scatter-border:       1px solid rgba(255, 255, 255, 0.08);
     --scatter-border-hover: 1px solid rgba(255, 255, 255, 0.18);
-    --scatter-border-focus: 1px solid #ffb800;
+    --scatter-border-focus: 1px solid var(--scatter-green);
 
     /* ── Motion ───────────────────────────────────────────────────────── */
-    /* Durational, not snappy. Motion is composed, not reactive. */
     --scatter-ease:         cubic-bezier(0.2, 0.8, 0.2, 1);
     --scatter-dur-fast:     120ms;
     --scatter-dur-base:     220ms;
@@ -81,4 +97,21 @@
     --scatter-bar-height:   44px;
     --scatter-icon:         20px;
     --scatter-icon-lg:      24px;
+
+    /* ── Aliases — backward compat ────────────────────────────────────── */
+    /* Music's existing components reference --green, --black etc.; these
+     * aliases route them to the unified scatter tokens so old code keeps
+     * working while new code references --scatter-* directly. Film and
+     * Write originally used cream/gold; they're being repainted to consume
+     * these tokens too. */
+    --black:        var(--scatter-black);
+    --dark:         var(--scatter-ink);
+    --surface:      var(--scatter-graphite);
+    --border:       rgba(255, 255, 255, 0.08);
+    --text:         var(--scatter-body);
+    --text-muted:   var(--scatter-quiet);
+    --green:        var(--scatter-green);
+    --amber:        var(--scatter-amber);
+    --background:   var(--scatter-black);
+    --foreground:   var(--scatter-body);
 }
