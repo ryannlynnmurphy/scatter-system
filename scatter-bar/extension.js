@@ -348,6 +348,11 @@ const SESSION_CMD = 'systemctl suspend';
 // Resolves <name> against the system app list (case-insensitive substring).
 const PIN_VERB = /^(pin|unpin)\s+(.+)$/i;
 
+/** Scatter used to hide Main.panel so only the bowtie chrome showed; that traps users without an obvious Escape. By default GNOME top bar stays. Set SCATTER_HIDE_GNOME_TOP_BAR=1 (e.g. in ~/.pam_environment or systemd user env) for the full Scatter-only chrome. */
+function scatterShouldHideGnomePanel() {
+    return GLib.getenv('SCATTER_HIDE_GNOME_TOP_BAR') === '1';
+}
+
 export default class ScatterBarExtension extends Extension {
     enable() {
         const VERSION_MARKER = `SCATTER-BAR-LOADED-${Date.now()}`;
@@ -362,21 +367,24 @@ export default class ScatterBarExtension extends Extension {
         this._revealShown = false;
         this._libraryShown = false;
 
+        this._hidTopPanel = false;
+
         // ── Boot to Scatter ────────────────────────────────────────────
-        // Hide GNOME's top panel (Activities + clock + system menu) so the
-        // session reads as Scatter, not Ubuntu. The bowtie at bottom-left
-        // is the only chrome that remains; right-click it for go-home,
-        // Esc inside any Scatter app for per-window close. The Super key
-        // still opens the Activities overview if the user needs anything
-        // panel-adjacent.
+        // Optionally hide GNOME's top panel (Activities + clock + system menu).
         //
-        // Re-shown unconditionally on disable so removing the extension
-        // restores the default Ubuntu experience.
-        this._panelWasVisible = Main.panel?.visible ?? true;
-        try {
-            Main.panel?.hide?.();
-        } catch (e) {
-            log(`scatter-bar: could not hide top panel: ${e.message || e}`);
+        // Default: leave it visible so Ubuntu stays navigatable. Scatter bowtie /
+        // bottom chrome is additive.
+        //
+        // Opt-in Scatter-only session: SCATTER_HIDE_GNOME_TOP_BAR=1 Super still
+        // opens Activities overview.
+        if (scatterShouldHideGnomePanel()) {
+            this._hidTopPanel = true;
+            this._panelWasVisible = Main.panel?.visible ?? true;
+            try {
+                Main.panel?.hide?.();
+            } catch (e) {
+                log(`scatter-bar: could not hide top panel: ${e.message || e}`);
+            }
         }
 
         // Build order = chrome z-order. The bowtie is the only thing the user
@@ -395,13 +403,12 @@ export default class ScatterBarExtension extends Extension {
     }
 
     disable() {
-        // Always restore the top panel — leaving it hidden after disable
-        // would trap the user out of GNOME chrome. Defensive: even if we
-        // never hid it, calling show() is a no-op.
-        try {
-            Main.panel?.show?.();
-        } catch (e) {
-            log(`scatter-bar: could not restore top panel: ${e.message || e}`);
+        if (this._hidTopPanel) {
+            try {
+                Main.panel?.show?.();
+            } catch (e) {
+                log(`scatter-bar: could not restore top panel: ${e.message || e}`);
+            }
         }
 
         if (this._monitorsChangedId) {

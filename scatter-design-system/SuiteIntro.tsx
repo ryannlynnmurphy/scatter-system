@@ -19,9 +19,19 @@ import { useEffect, useState } from "react";
  * If multiple apps are switched between in rapid succession, each app's
  * intro fires on its own load — the bar's app-switch dedupe (Slice 2)
  * means clicks don't re-spawn windows, so this isn't gratuitous.
+ *
+ * A failsafe timer always clears the overlay — if hydration or timers fail,
+ * the old behavior left a fullscreen blocking layer indefinitely.
  */
+const SUITE_INTRO_FAILSAFE_MS = 3000;
+
 export default function SuiteIntro() {
   const [phase, setPhase] = useState<"hold" | "fade" | "gone">("hold");
+
+  useEffect(() => {
+    const failSafe = window.setTimeout(() => setPhase("gone"), SUITE_INTRO_FAILSAFE_MS);
+    return () => window.clearTimeout(failSafe);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
