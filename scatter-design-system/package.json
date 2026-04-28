@@ -8,6 +8,7 @@
   "files": [
     "index.ts",
     "EscapeContract.tsx",
+    "ScatterBar.tsx",
     "tokens.css",
     "buttons.css",
     "README.md"

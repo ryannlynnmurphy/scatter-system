@@ -15,3 +15,11 @@
  */
 
 export { default as EscapeContract } from "./EscapeContract";
+export { default as ScatterBar } from "./ScatterBar";
+export type {
+  ScatterProject,
+  ScatterProjectFile,
+  ScatterProjectManifest,
+  ScatterProjectSummary,
+  ScatterTool,
+} from "./ScatterBar";
