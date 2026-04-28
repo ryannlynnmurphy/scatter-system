@@ -221,9 +221,13 @@ function _buildApps() {
         brand: 'pinned',
         pinned: true,
     }));
+    // Reveal layout: last 5 unique apps Ryann actually used + the three
+    // control tiles (chat / settings / more-apps). The full Scatter suite
+    // is reachable via the More tile's catalog — the bar itself is a
+    // recents-aware shortcut, not a directory of every surface.
     return {
-        recents,
-        suite:    [...SUITE_APPS, ...pins],
+        recents:  [...recents, ...pins],
+        suite:    [],
         controls: [CHAT_TILE, SETTINGS_TILE, CATALOG_TILE],
     };
 }

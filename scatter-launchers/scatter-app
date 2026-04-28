@@ -35,7 +35,11 @@ URL="http://localhost:${PORT}"
 CONFIG_DIR="$HOME/.config/scatter"
 LOGS_DIR="$CONFIG_DIR/logs"
 RECENTS="$CONFIG_DIR/recents.jsonl"
-USERDATA="$CONFIG_DIR/app-data/$SLUG"
+# Snap chromium (the default on this machine) can't write inside hidden
+# dirs like ~/.config — its home interface only exposes non-hidden $HOME
+# files. Park the per-app browser profile in ~/scatter-app-data/<slug>
+# so the singleton lock can actually be created.
+USERDATA="$HOME/scatter-app-data/$SLUG"
 mkdir -p "$LOGS_DIR" "$USERDATA"
 
 # ── 1. Record the launch ────────────────────────────────────────────────
