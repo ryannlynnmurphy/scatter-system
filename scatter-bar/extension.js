@@ -362,6 +362,23 @@ export default class ScatterBarExtension extends Extension {
         this._revealShown = false;
         this._libraryShown = false;
 
+        // ── Boot to Scatter ────────────────────────────────────────────
+        // Hide GNOME's top panel (Activities + clock + system menu) so the
+        // session reads as Scatter, not Ubuntu. The bowtie at bottom-left
+        // is the only chrome that remains; right-click it for go-home,
+        // Esc inside any Scatter app for per-window close. The Super key
+        // still opens the Activities overview if the user needs anything
+        // panel-adjacent.
+        //
+        // Re-shown unconditionally on disable so removing the extension
+        // restores the default Ubuntu experience.
+        this._panelWasVisible = Main.panel?.visible ?? true;
+        try {
+            Main.panel?.hide?.();
+        } catch (e) {
+            log(`scatter-bar: could not hide top panel: ${e.message || e}`);
+        }
+
         // Build order = chrome z-order. The bowtie is the only thing the user
         // must always be able to click (to dismiss the reveal), so add it LAST
         // so it sits on top of the reveal grid and entry capsule.
@@ -378,6 +395,15 @@ export default class ScatterBarExtension extends Extension {
     }
 
     disable() {
+        // Always restore the top panel — leaving it hidden after disable
+        // would trap the user out of GNOME chrome. Defensive: even if we
+        // never hid it, calling show() is a no-op.
+        try {
+            Main.panel?.show?.();
+        } catch (e) {
+            log(`scatter-bar: could not restore top panel: ${e.message || e}`);
+        }
+
         if (this._monitorsChangedId) {
             Main.layoutManager.disconnect(this._monitorsChangedId);
             this._monitorsChangedId = 0;
