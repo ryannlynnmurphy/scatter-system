@@ -156,10 +156,22 @@ TOOLS: tuple[Tool, ...] = (
         file_pattern="{slug}.md",
     ),
     Tool(
-        "libreoffice", "LibreOffice Writer", "write",
-        "Long-form word processing.",
-        ("libreoffice", "lowriter"),
+        "lowriter", "LibreOffice Writer", "write",
+        "Long-form word processing — letters, manuscripts, reports.",
+        ("lowriter", "libreoffice"),
         file_pattern="{slug}.odt",
+    ),
+    Tool(
+        "localc", "LibreOffice Calc", "write",
+        "Spreadsheets, budgets, line-by-line lists.",
+        ("localc", "libreoffice"),
+        file_pattern="{slug}.ods",
+    ),
+    Tool(
+        "loimpress", "LibreOffice Impress", "write",
+        "Decks, slides, talks.",
+        ("loimpress", "libreoffice"),
+        file_pattern="{slug}.odp",
     ),
     # ---------- code ----------
     Tool(
