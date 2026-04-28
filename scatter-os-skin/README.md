@@ -20,7 +20,7 @@ sudo reboot
 You will see:
 
 - **GRUB menu** — black, `SCATTER — the alignment OS`, green highlight.
-- **Plymouth** (boot splash) — HZL face `(◉.◉)` + SCATTER wordmark, green/amber progress dots on pure black. No Ubuntu logo.
+- **Plymouth** (boot splash) — Scatter face `(◉.◉)` + SCATTER wordmark, green/amber progress dots on pure black. No Ubuntu logo.
 - **TTY + SSH login banner** — Scatter greeting in `/etc/issue` and `/etc/motd`.
 - (with `--hostname`) **terminal prompt** — `ryannlynnmurphy@scatter:~$` instead of the factory hostname.
 

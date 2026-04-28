@@ -8,7 +8,7 @@
 
 ## Why this exists
 
-Scatter is consolidating from 19 GitHub repos to one product. The 6 real components — substrate, router, voice persona (Hazel), cluster, Studio modes, Academy lessons — must talk through one disciplined surface, or the consolidation is cosmetic. This document is that surface.
+Scatter is consolidating from 19 GitHub repos to one product. The 6 real components — substrate, router, voice persona (Scatter), cluster, Studio modes, Academy lessons — must talk through one disciplined surface, or the consolidation is cosmetic. This document is that surface.
 
 The contract is the load-bearing artifact. Ship the contract, conform every component to it, and the consolidation becomes mechanical. Skip the contract, and Scatter remains six tools that share branding.
 
@@ -213,10 +213,10 @@ Citation enforcement: Core refuses to return a teach response without retrieved 
 |---|---|---|
 | `scatter-system` (head node) | 27 in-process callers, 14 ad-hoc endpoints | Same in-process, formalize endpoints under `/v1/`, add identity + sessions + teach |
 | `scatter` (small router) | Standalone FastAPI on :8787 | **Folds into Core.** `/v1/route` replaces it. |
-| `hzl-cluster` → `scatter-cluster` | Standalone routing facade, no inference | Becomes Core's cluster backend; workers gain Ollama (Phase 2 of cluster) |
-| `Hazel` (voice persona) | Direct Anthropic + Whisper + Spotify SDK calls | Talks to Core for routing + memory; voice loop stays its own daemon for latency |
-| `tiny-hazel` (universal shell) | llama.cpp local with 40+ instant handlers | Folds in as the engine behind the bottom bar; Core registers it as a local model |
-| `StreamClipper` → `Scatter Studio` | 12 `/api/*-ai` routes call Anthropic directly | One adapter wraps all 12 to POST `/v1/route` then `/v1/messages`. State migrates from `localStorage hzl_*` to Core sessions. |
+| `scatter-cluster` (formerly separate routing repo) | Standalone routing facade, no inference | Becomes Core's cluster backend; workers gain Ollama (Phase 2 of cluster) |
+| Scatter (voice persona) | Direct Anthropic + Whisper + Spotify SDK calls | Talks to Core for routing + memory; voice loop stays its own daemon for latency |
+| tiny-scatter shell (universal shell) | llama.cpp local with 40+ instant handlers | Folds in as the engine behind the bottom bar; Core registers it as a local model |
+| `StreamClipper` → `Scatter Studio` | 12 `/api/*-ai` routes call Anthropic directly | One adapter wraps all 12 to POST `/v1/route` then `/v1/messages`. State migrates from legacy `localStorage scatter_*` keys to Core sessions. |
 | Academy (new) | Doesn't exist | Rides on `/v1/teach/*` + `/v1/corpus/search` against ingested CK-12 |
 
 ---
@@ -255,7 +255,7 @@ Phase 0 ships when one Studio mode (Write) makes a Claude call through the contr
 
 ## Open questions to resolve before v1
 
-- **Voice latency budget under contract.** Hazel's voice loop targets <2s end-to-end. If `/v1/route` + `/v1/messages` adds >150ms, voice gets its own fast path (direct intent classification, skip routing for voice-flagged requests).
+- **Voice latency budget under contract.** Scatter's voice loop targets <2s end-to-end. If `/v1/route` + `/v1/messages` adds >150ms, voice gets its own fast path (direct intent classification, skip routing for voice-flagged requests).
 - **Child profile vs learner profile.** Current scatter-system has `learner` (network-isolated). Child UX likely needs a separate profile with: corpus-only retrieval, no shell access, parent-revocable history. Define before Academy ships.
 - **Corpus storage layout.** Per-corpus subdir under `~/.scatter/corpus/`? Per-user or shared? Citations must survive offline (per "data leaves consciously" — the `saythanks` link can't be the only attribution surface).
 - **Cluster head failover.** When the laptop is one client among many (school deployment), which Pi becomes Core? Answer is "the one declared in `cluster.json`" but the failover semantics need design.

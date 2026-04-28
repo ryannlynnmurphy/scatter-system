@@ -126,7 +126,7 @@ def main():
     gd.text((140, 36), word, font=f, fill=BONE)
     greeter.save(GDM / "greeter-logo.png")
 
-    # User avatar — HZL face on ink square, 256px (AccountsService standard).
+    # User avatar — Scatter face on ink square, 256px (AccountsService standard).
     avatar = Image.new("RGBA", (256, 256), BLACK + (255,))
     ad = ImageDraw.Draw(avatar)
     draw_pixel_face(ad, cx=128, cy=128, s=8)

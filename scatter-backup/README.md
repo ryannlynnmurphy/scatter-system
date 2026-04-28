@@ -15,7 +15,7 @@ Override via `~/.scatter/config.json`:
 ```json
 {
   "backup": {
-    "include": ["~/.scatter", "~/Documents/scatter-workspace", "~/projects/hazel"],
+    "include": ["~/.scatter", "~/Documents/scatter-workspace", "~/projects/scatter"],
     "exclude": ["node_modules", ".next", "__pycache__"],
     "destination": "/media/ryann/ScatterBackup",
     "keep": 10

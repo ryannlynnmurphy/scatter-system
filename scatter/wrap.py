@@ -143,7 +143,7 @@ COMMONS = {
 
 
 # ---------- prototype registry ----------
-# Next.js-era apps in ~/projects/hazel/. These are gifts-from-self: Ryann's
+# Next.js-era apps in ~/projects/scatter/. These are gifts-from-self: Ryann's
 # prototype work preserved intact. Launchers spawn `npm run dev` on an
 # assigned port, wait for it, and host it in a native GTK window.
 # The directories on disk still carry legacy names for git-history reasons;
@@ -153,7 +153,7 @@ PROTOTYPES = {
     "draft-prototype": {
         "scatter_name": "Scatter Draft",
         "provenance": "Ryann Murphy — Scatter prototype, early 2026 (playwriting)",
-        "source_dir": "projects/hazel/hzl-draft",
+        "source_dir": "projects/scatter/scatter-draft",
         "dev_port": 3101,
         "icon": "accessories-text-editor",
         "needs_net": False,
@@ -164,7 +164,7 @@ PROTOTYPES = {
     "film-prototype": {
         "scatter_name": "Scatter Film",
         "provenance": "Ryann Murphy — Scatter prototype, early 2026 (script-aware editing)",
-        "source_dir": "projects/hazel/hzl-film",
+        "source_dir": "projects/scatter/scatter-film",
         "dev_port": 3102,
         "icon": "video-x-generic",
         "needs_net": False,
@@ -175,7 +175,7 @@ PROTOTYPES = {
     "music-prototype": {
         "scatter_name": "Scatter Music",
         "provenance": "Ryann Murphy — Scatter prototype, early 2026 (composition)",
-        "source_dir": "projects/hazel/hzl-music",
+        "source_dir": "projects/scatter/scatter-music",
         "dev_port": 3103,
         "icon": "audio-x-generic",
         "needs_net": False,
@@ -186,7 +186,7 @@ PROTOTYPES = {
     "write-prototype": {
         "scatter_name": "Scatter Write",
         "provenance": "Ryann Murphy — Scatter prototype, early 2026 (long-form)",
-        "source_dir": "projects/hazel/hzl-write",
+        "source_dir": "projects/scatter/scatter-write",
         "dev_port": 3104,
         "icon": "accessories-text-editor",
         "needs_net": False,
@@ -521,7 +521,7 @@ def _cli(argv: list[str]) -> int:
             m = COMMONS[key]
             print(f"  {key:<28} {m['scatter_name']:<22} {m['provenance']:<48} {'yes' if m['needs_net'] else 'no'}")
         print()
-        print("PROTOTYPES (Next.js dev-server apps from ~/projects/hazel/):")
+        print("PROTOTYPES (Next.js dev-server apps from ~/projects/scatter/):")
         print(f"  {'KEY':<28} {'SCATTER NAME':<22} {'PROVENANCE':<48} PORT")
         for key in sorted(PROTOTYPES):
             m = PROTOTYPES[key]

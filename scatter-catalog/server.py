@@ -3,7 +3,7 @@
 Three sources, one surface:
   Suite — Scatter suite apps (read from ~/.local/share/applications/
           scatter-*.desktop for known slugs)
-  Mine  — Ryann's own work, auto-detected from ~/projects, ~/HZL-Academy-,
+  Mine  — Ryann's own work, auto-detected from ~/projects, ~/scatter-academy,
           and ~/scatter-system itself. A repo qualifies if it has a
           package.json with a "scatter" field, OR a shipped .desktop file
           alongside it. Lower noise than blindly scanning every dir with
@@ -32,7 +32,7 @@ TOKENS_CSS = HERE.parent / "scatter-design-system" / "tokens.css"
 APPS_DIR_USER = Path.home() / ".local" / "share" / "applications"
 PROJECTS_ROOTS = [
     Path.home() / "projects",
-    Path.home() / "HZL-Academy-",
+    Path.home() / "scatter-academy",
     Path.home() / "scatter-system",
 ]
 
@@ -115,7 +115,7 @@ def _qualify(child: Path) -> dict | None:
         try:
             data = json.loads(pkg.read_text())
             name = data.get("name", "")
-            if "scatter" in data or name.startswith("scatter-") or name.startswith("hzl-"):
+            if "scatter" in data or name.startswith("scatter-"):
                 return {
                     "id": str(child),
                     "name": data.get("name", child.name),
@@ -177,7 +177,7 @@ def list_mine() -> list[dict]:
         consider(root, depth=2)
 
     # Dedup by package name — multiple checkouts of the same project
-    # (e.g. ~/HZL-Academy- and ~/projects/hazel/hzl-academy) collapse to
+    # (e.g. two copies under ~/scatter-academy and ~/projects/scatter) collapse to
     # the most-recently-modified copy. Falls back to the path basename if
     # `name` is empty so unnamed projects don't all collide on "".
     by_name: dict[str, dict] = {}

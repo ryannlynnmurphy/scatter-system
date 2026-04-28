@@ -159,7 +159,7 @@ A **two-week** Phase 0, ending with both ship tests passing. The product test ga
 - D1: Capability scheme. `/v1/capabilities/*` endpoints. `Authorization: Cap` parsing. Operator capability for `default` user. Existing single-user behavior unchanged from outside.
 - D2: Sessions move from in-memory dict to `~/.scatter/sessions/<user>/<id>.json` with ETag. Concurrent-write test in CI.
 - D3: Cluster manifest. `~/.scatter/cluster.json`. `/v1/about/cluster` reports topology. Ollama installed on pi-1 with `llama3.2:3b`.
-- D4: Ollama on pi-2, pi-3, pi-4. `scatter-cluster` orchestrator (renamed from `hzl-cluster`) routes to a worker, worker runs Ollama, returns content.
+- D4: Ollama on pi-2, pi-3, pi-4. `scatter-cluster` orchestrator routes to a worker, worker runs Ollama, returns content.
 - D5: `/v1/route` returns `RoutingDecision`. `/v1/messages` enforces `decision_id`. The five greps land in pre-commit. Watt meter ordered.
 
 **Week 2 — teaching loop + product test:**

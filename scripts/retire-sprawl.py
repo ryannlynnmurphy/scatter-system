@@ -71,85 +71,85 @@ POLICY: list[tuple[str, str, str]] = [
 
     # --- prototype apps we chose to wrap (keep source, prototypes are launchable) ---
     (
-        "~/projects/hazel/hzl-draft",
+        "~/projects/scatter/scatter-draft",
         "KEEP",
         "wrapped as Scatter Draft (prototype); running dev-server app",
     ),
     (
-        "~/projects/hazel/hzl-film",
+        "~/projects/scatter/scatter-film",
         "KEEP",
         "wrapped as Scatter Film (prototype); script-aware coverage analysis lives here",
     ),
     (
-        "~/projects/hazel/hzl-music",
+        "~/projects/scatter/scatter-music",
         "KEEP",
-        "wrapped as Scatter Music (prototype)",
+        "wrapped as Scatter Sound (prototype)",
     ),
     (
-        "~/projects/hazel/hzl-write",
+        "~/projects/scatter/scatter-write",
         "KEEP",
         "wrapped as Scatter Write (prototype)",
     ),
 
     # --- prototype-era infrastructure superseded by scatter_core ---
     (
-        "~/projects/hazel/hzl-cli",
+        "~/projects/scatter/hzl-cli",
         "ARCHIVE",
         "superseded by bin/scatter and scatter_core CLI",
     ),
     (
-        "~/projects/hazel/hzl-core",
+        "~/projects/scatter/hzl-core",
         "ARCHIVE",
         "superseded by scatter_core.py substrate",
     ),
     (
-        "~/projects/hazel/hzl-cluster",
+        "~/projects/scatter/hzl-cluster",
         "ARCHIVE",
         "distributed-routing prototype; out of scope for current thesis",
     ),
     (
-        "~/projects/hazel/hzl-studio-os",
-        "ARCHIVE",
-        "mode-switcher prototype; superseded by Scatter GUI + scatter wrap",
+        "~/projects/scatter/scatter-studio-os",
+        "KEEP",
+        "wrapped as Scatter Studio (prototype)",
     ),
 
     # --- earliest prototype-era (retired names) ---
     (
-        "~/projects/hazel/Hazel",
+        "~/projects/scatter/Hazel",
         "ARCHIVE",
-        "earliest prototype-era (Hazel name retired); carries nothing forward",
+        "earliest prototype-era voice stack (codename retired); carries nothing forward",
     ),
     (
-        "~/projects/hazel/hazel-os",
+        "~/projects/scatter/hazel-os",
         "ARCHIVE",
-        "earliest prototype-era OS shell (hazel-os retired); carries nothing forward",
+        "earliest prototype-era OS shell; carries nothing forward",
     ),
 
     # --- genuinely-deferred ---
     (
-        "~/projects/hazel/hzl-academy",
+        "~/projects/scatter/hzl-academy",
         "DEFER",
-        "Scatter Schools prototype; future work, not distilled yet",
+        "Scatter Schools course prototype; future work, not distilled yet",
     ),
     (
-        "~/projects/hazel/hzl-academy-demo",
+        "~/projects/scatter/hzl-academy-demo",
         "DEFER",
-        "Scatter Schools demo; paired with hzl-academy",
+        "Scatter Schools demo; paired with academy worktrees",
     ),
     (
-        "~/projects/hazel/HZL Academy (D-drive)",
+        "~/projects/scatter/HZL Academy (D-drive)",
         "DEFER",
         "Scatter Schools archive from another drive; leave until Schools revisit",
     ),
     (
-        "~/projects/hazel/hzl-game",
+        "~/projects/scatter/hzl-game",
         "DEFER",
         "game prototype; out of current distilled set, decision not made",
     ),
     (
-        "~/projects/hazel/hzl-stream",
-        "DEFER",
-        "streaming prototype; out of current distilled set, decision not made",
+        "~/projects/scatter/scatter-stream",
+        "KEEP",
+        "wrapped as Scatter Stream (prototype)",
     ),
 ]
 

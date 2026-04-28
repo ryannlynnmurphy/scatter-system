@@ -12,7 +12,7 @@ replaces that with a small taxonomy of artifacts that the model fills in:
 
 Each subtype is a JSON contract. qwen returns JSON; the server renders it
 into a consistent dark Scatter card. No more freeform HTML, no more
-mystery output. The lesson shape mirrors hzl-academy so a future lesson
+mystery output. The lesson shape mirrors scatter-academy so a future lesson
 corpus can flow in without re-templating.
 
 Stdlib only. Iframes are sandboxed by the caller; we still html-escape

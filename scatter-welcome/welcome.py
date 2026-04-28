@@ -29,29 +29,29 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import scatter_core as sc  # noqa: E402
 
 
-PROTOTYPES_ROOT = Path.home() / "projects" / "hazel"
+PROTOTYPES_ROOT = Path.home() / "projects" / "scatter"
 
 # Ordered. Order matters — it's the narrative arc.
 SLIDES = [
     {
         "title": "Scatter Draft",
         "voice": "the playwright",
-        "readme": PROTOTYPES_ROOT / "hzl-draft" / "README.md",
+        "readme": PROTOTYPES_ROOT / "scatter-draft" / "README.md",
     },
     {
         "title": "Scatter Film",
         "voice": "the screenwriter",
-        "readme": PROTOTYPES_ROOT / "hzl-film" / "README.md",
+        "readme": PROTOTYPES_ROOT / "scatter-film" / "README.md",
     },
     {
         "title": "Scatter Music",
         "voice": "the arranger",
-        "readme": PROTOTYPES_ROOT / "hzl-music" / "README.md",
+        "readme": PROTOTYPES_ROOT / "scatter-music" / "README.md",
     },
     {
         "title": "Scatter Write",
         "voice": "the writer",
-        "readme": PROTOTYPES_ROOT / "hzl-write" / "README.md",
+        "readme": PROTOTYPES_ROOT / "scatter-write" / "README.md",
     },
 ]
 

@@ -1,4 +1,4 @@
-# Scatter GRUB theme — HZL pixel-art canon.
+# Scatter GRUB theme — Scatter pixel-art canon.
 title-text: ""
 desktop-image: "background.png"
 desktop-color: "#0a0a0a"
