@@ -18,9 +18,46 @@ import Clutter from 'gi://Clutter';
 import Pango from 'gi://Pango';
 import Soup from 'gi://Soup';
 import Gio from 'gi://Gio';
+import Meta from 'gi://Meta';
 
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+
+// ── Window discovery (single-room enforcement) ─────────────────────────
+//
+// Scatter apps boot with `--class=Scatter-<Slug>` (see ~/.local/bin/scatter-app).
+// Before spawning anything, we ask the compositor whether a window with that
+// class already exists; if so, raise/focus it instead of creating a duplicate.
+// Stacking is structurally impossible if the gatekeeper actually gates.
+const SCATTER_WM_PREFIX = 'Scatter-';
+
+function _findScatterWindowsByPrefix(prefix) {
+    const out = [];
+    const actors = global.get_window_actors() || [];
+    for (const actor of actors) {
+        const win = actor.meta_window;
+        if (!win) continue;
+        const wmClass = win.get_wm_class && win.get_wm_class();
+        if (!wmClass) continue;
+        if (wmClass.toLowerCase().startsWith(prefix.toLowerCase())) {
+            out.push(win);
+        }
+    }
+    return out;
+}
+
+function _findScatterWindow(brand) {
+    // brand is "music" / "film" / "write" / etc. — wm_class is "Scatter-Music".
+    const target = (SCATTER_WM_PREFIX + brand).toLowerCase();
+    const actors = global.get_window_actors() || [];
+    for (const actor of actors) {
+        const win = actor.meta_window;
+        if (!win) continue;
+        const wmClass = (win.get_wm_class && win.get_wm_class()) || '';
+        if (wmClass.toLowerCase() === target) return win;
+    }
+    return null;
+}
 
 const ROUTER_URL = 'http://127.0.0.1:8787/chat';
 const SPEAK_URL = 'http://127.0.0.1:8787/speak';
@@ -397,6 +434,17 @@ export default class ScatterBarExtension extends Extension {
         });
         this._glyph.set_pivot_point(0.5, 0.5);
         this._glyph.connect('clicked', () => this._toggleReveal());
+        // Right-click on the bowtie = "go home" — minimize every Scatter
+        // window so the user is never trapped in a fullscreen app with no
+        // chrome. Doesn't kill processes; their work is intact, just out of
+        // the way. (Esc inside any Scatter app remains the per-window close.)
+        this._glyph.connect('button-press-event', (_actor, event) => {
+            if (event.get_button() === 3) {
+                this._goHome();
+                return Clutter.EVENT_STOP;
+            }
+            return Clutter.EVENT_PROPAGATE;
+        });
         this._glyph.connect('enter-event', () => {
             this._glyph.ease({
                 scale_x: 1.06, scale_y: 1.06,
@@ -1749,6 +1797,31 @@ export default class ScatterBarExtension extends Extension {
         return tile;
     }
 
+    // ── Go home ────────────────────────────────────────────────────────
+    //
+    // The user's "show me the desktop" gesture. Right-click the bowtie and
+    // every Scatter window minimizes, leaving processes alive and work
+    // intact. This is the second arm of the escape contract: Esc kills the
+    // focused window, the bowtie minimizes the whole suite. Together they
+    // mean the user is never trapped in a fullscreen app — there is always a
+    // way out that isn't "turn off the computer."
+    _goHome() {
+        const wins = _findScatterWindowsByPrefix(SCATTER_WM_PREFIX);
+        let count = 0;
+        for (const win of wins) {
+            try {
+                win.minimize();
+                count += 1;
+            } catch (e) {
+                log(`scatter-bar: minimize failed for ${win.get_wm_class && win.get_wm_class()}: ${e.message || e}`);
+            }
+        }
+        if (this._revealShown) this._hideReveal();
+        if (count > 0) {
+            log(`scatter-bar: go-home minimized ${count} Scatter window(s)`);
+        }
+    }
+
     _launch(cmd) {
         if (cmd === '__overview_apps') {
             // Sentinel: open the Scatter-native app library instead of GNOME's.
@@ -1809,6 +1882,25 @@ export default class ScatterBarExtension extends Extension {
         const appSpec = (typeof app === 'object' && app !== null)
             ? app
             : { exec: app, signature: null };
+
+        // Single-room enforcement: if this is a known Scatter app and a window
+        // already exists with its WM class, raise it instead of spawning.
+        // Apps no longer pile up; clicking Music while Music is open focuses
+        // the existing window. Stacking is structurally impossible.
+        if (appSpec.brand) {
+            const existing = _findScatterWindow(appSpec.brand);
+            if (existing) {
+                try {
+                    existing.activate(global.get_current_time());
+                    if (this._revealShown) this._hideReveal();
+                    return;
+                } catch (e) {
+                    log(`scatter-bar: activate failed for ${appSpec.brand}: ${e.message || e}`);
+                    // fall through to normal spawn path
+                }
+            }
+        }
+
         const signature = this._signatureFor(appSpec);
         const launchFn = () => this._launch(appSpec.exec);
 

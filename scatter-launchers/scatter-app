@@ -3,7 +3,7 @@
 #
 # Usage: scatter-app <slug> <port> <project-dir> [<dev-cmd>]
 #
-#   slug         e.g. schools, studio, music, write, draft, film, stream
+#   slug         e.g. home, catalog, schools, studio, music, write, draft, film, stream
 #   port         e.g. 3000
 #   project-dir  absolute path to the app's source directory
 #   dev-cmd      optional; defaults to 'npx next dev -p <port>'.
@@ -80,11 +80,17 @@ fi
 # Music / Schools / etc.
 WM_CLASS="Scatter-${NAME}"
 
+# Single-room mode: every Scatter app boots maximized so it fills the
+# screen. The bar is the only chrome anywhere; the EscapeContract component
+# inside each Next app provides Esc + a fixed × button so the window is
+# never a trap. Right-click the bar's bowtie to minimize all Scatter
+# windows at once (go-home gesture).
 if command -v chromium-browser >/dev/null 2>&1; then
   exec chromium-browser \
     --app="$URL" \
     --user-data-dir="$USERDATA" \
     --class="$WM_CLASS" \
+    --start-maximized \
     --no-default-browser-check \
     --no-first-run
 elif command -v chromium >/dev/null 2>&1; then
@@ -92,6 +98,7 @@ elif command -v chromium >/dev/null 2>&1; then
     --app="$URL" \
     --user-data-dir="$USERDATA" \
     --class="$WM_CLASS" \
+    --start-maximized \
     --no-default-browser-check \
     --no-first-run
 elif command -v firefox >/dev/null 2>&1; then
