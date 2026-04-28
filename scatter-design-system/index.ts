@@ -16,6 +16,7 @@
 
 export { default as EscapeContract } from "./EscapeContract";
 export { default as ScatterBar } from "./ScatterBar";
+export { default as SuiteIntro } from "./SuiteIntro";
 export type {
   ScatterProject,
   ScatterProjectFile,

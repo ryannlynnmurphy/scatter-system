@@ -9,6 +9,7 @@
     "index.ts",
     "EscapeContract.tsx",
     "ScatterBar.tsx",
+    "SuiteIntro.tsx",
     "tokens.css",
     "buttons.css",
     "README.md"

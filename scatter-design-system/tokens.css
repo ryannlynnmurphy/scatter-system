@@ -49,10 +49,15 @@
     --scatter-watts:       #b88a3a;
 
     /* ── Typography ───────────────────────────────────────────────────── */
-    --scatter-display:     'Inter Display', 'Inter', system-ui, sans-serif;
-    --scatter-body-font:   'Inter', system-ui, sans-serif;
-    --scatter-mono:        'JetBrains Mono', 'Victor Mono', monospace;
-    --scatter-glyph:       'JetBrains Mono', 'Victor Mono', monospace;
+    /* Each Next app loads Inter + JetBrains Mono via next/font and exposes
+     * them as --font-inter / --font-mono on <html>. Tokens prefer those
+     * CSS vars so the suite uses one bundled-and-subsetted family across
+     * apps; if the var isn't set (e.g. raw browser preview), the system
+     * fallback chain takes over. */
+    --scatter-display:     var(--font-inter, 'Inter Display', 'Inter', system-ui, sans-serif);
+    --scatter-body-font:   var(--font-inter, 'Inter', system-ui, sans-serif);
+    --scatter-mono:        var(--font-mono, 'JetBrains Mono', 'Victor Mono', monospace);
+    --scatter-glyph:       var(--font-mono, 'JetBrains Mono', 'Victor Mono', monospace);
 
     --scatter-type-xs:     10px;
     --scatter-type-sm:     12px;
