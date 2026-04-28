@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scatter Catalog</title>
+  <link rel="stylesheet" href="/tokens.css">
+  <style>
+    body { padding: 0; }
+    .frame {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: var(--scatter-s-7) var(--scatter-s-6);
+      min-height: 100vh;
+      display: flex; flex-direction: column;
+    }
+    .masthead {
+      display: flex; align-items: baseline; justify-content: space-between;
+      padding-bottom: var(--scatter-s-5);
+      border-bottom: var(--scatter-border);
+      margin-bottom: var(--scatter-s-6);
+    }
+    .masthead h1 {
+      font: 500 var(--scatter-type-display) / 1 var(--scatter-display);
+      color: var(--scatter-bright);
+      letter-spacing: var(--scatter-track-tight);
+    }
+    .masthead .surface-label {
+      font: 400 var(--scatter-type-xs) / 1 var(--scatter-mono);
+      color: var(--scatter-quiet);
+      letter-spacing: var(--scatter-track-wide);
+      text-transform: uppercase;
+    }
+
+    /* Search + tabs sit together; tabs scope what the search filters. */
+    .toolbar {
+      display: flex; gap: var(--scatter-s-5);
+      align-items: center;
+      margin-bottom: var(--scatter-s-6);
+    }
+    .search {
+      flex: 1;
+      background: var(--scatter-ink);
+      border: var(--scatter-border);
+      color: var(--scatter-bright);
+      padding: var(--scatter-s-3) var(--scatter-s-4);
+      font: 400 var(--scatter-type-base) / 1 var(--scatter-body-font);
+      border-radius: var(--scatter-radius-soft);
+      transition: border-color var(--scatter-dur-base) var(--scatter-ease);
+    }
+    .search:focus { border: var(--scatter-border-focus); outline: none; }
+    .search::placeholder { color: var(--scatter-quiet); }
+
+    .tabs {
+      display: flex; gap: 0;
+      border: var(--scatter-border);
+      border-radius: var(--scatter-radius-soft);
+      overflow: hidden;
+    }
+    .tab {
+      background: transparent;
+      color: var(--scatter-quiet);
+      border: none;
+      padding: var(--scatter-s-3) var(--scatter-s-5);
+      font: 500 var(--scatter-type-xs) / 1 var(--scatter-display);
+      letter-spacing: var(--scatter-track-caps);
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: color var(--scatter-dur-base) var(--scatter-ease),
+                  background var(--scatter-dur-base) var(--scatter-ease);
+    }
+    .tab + .tab { border-left: 1px solid rgba(255,255,255,0.08); }
+    .tab:hover { color: var(--scatter-bright); }
+    .tab.active {
+      color: var(--scatter-amber);
+      background: var(--scatter-amber-wash);
+    }
+
+    .tab-meta {
+      font: 400 var(--scatter-type-xs) / 1 var(--scatter-mono);
+      color: var(--scatter-quiet);
+      letter-spacing: var(--scatter-track-caps);
+      text-transform: uppercase;
+      margin-bottom: var(--scatter-s-4);
+      min-height: 12px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: var(--scatter-s-3);
+    }
+    .tile {
+      background: var(--scatter-graphite);
+      border: var(--scatter-border);
+      padding: var(--scatter-s-5);
+      cursor: pointer;
+      transition: border-color var(--scatter-dur-base) var(--scatter-ease);
+      text-align: left;
+      color: inherit;
+      font: inherit;
+    }
+    .tile:hover  { border: var(--scatter-border-hover); }
+    .tile:focus  { border: var(--scatter-border-focus); outline: none; }
+    .tile .src {
+      font-size: var(--scatter-type-xs);
+      color: var(--scatter-amber);
+      letter-spacing: var(--scatter-track-caps);
+      text-transform: uppercase;
+      margin-bottom: var(--scatter-s-2);
+    }
+    .tile .name {
+      font: 500 var(--scatter-type-md) / 1.3 var(--scatter-display);
+      color: var(--scatter-bright);
+      margin-bottom: var(--scatter-s-1);
+    }
+    .tile .comment {
+      font-size: var(--scatter-type-sm);
+      color: var(--scatter-body);
+      line-height: 1.5;
+      margin-top: var(--scatter-s-2);
+    }
+    .tile .install {
+      font: 400 var(--scatter-type-xs) / 1.4 var(--scatter-mono);
+      color: var(--scatter-quiet);
+      margin-top: var(--scatter-s-3);
+      padding: var(--scatter-s-2) var(--scatter-s-3);
+      background: var(--scatter-black);
+      border: 1px dashed var(--scatter-slate);
+      word-break: break-all;
+    }
+
+    .empty, .loading {
+      padding: var(--scatter-s-7);
+      text-align: center;
+      color: var(--scatter-quiet);
+      font-size: var(--scatter-type-sm);
+      border: 1px dashed var(--scatter-slate);
+    }
+
+    .toast {
+      position: fixed;
+      bottom: var(--scatter-s-6);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--scatter-ink);
+      border: 1px solid var(--scatter-amber);
+      color: var(--scatter-bright);
+      padding: var(--scatter-s-3) var(--scatter-s-5);
+      font: 400 var(--scatter-type-sm) / 1.4 var(--scatter-body-font);
+      max-width: 600px;
+      transition: opacity var(--scatter-dur-base) var(--scatter-ease);
+      pointer-events: auto;
+      z-index: 100;
+    }
+    .toast.hidden { opacity: 0; pointer-events: none; }
+    .toast pre {
+      margin-top: var(--scatter-s-2);
+      font-family: var(--scatter-mono);
+      font-size: var(--scatter-type-xs);
+      color: var(--scatter-amber);
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <header class="masthead">
+      <h1>Catalog</h1>
+      <div class="surface-label">Scatter · everything</div>
+    </header>
+
+    <div class="toolbar">
+      <input id="search" class="search" type="text" placeholder="Search Scatter, your work, or every open-source app on this machine." autocomplete="off">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="suite"   role="tab">Suite</button>
+        <button class="tab"        data-tab="mine"    role="tab">Mine</button>
+        <button class="tab"        data-tab="world"   role="tab">World</button>
+      </div>
+    </div>
+
+    <div class="tab-meta" id="tab-meta">&nbsp;</div>
+
+    <main id="grid" class="grid">
+      <div class="loading">Loading…</div>
+    </main>
+  </div>
+
+  <div class="toast hidden" id="toast"></div>
+
+  <script>
+    const grid    = document.getElementById('grid');
+    const search  = document.getElementById('search');
+    const meta    = document.getElementById('tab-meta');
+    const toast   = document.getElementById('toast');
+    const tabs    = document.querySelectorAll('.tab');
+
+    let currentTab = 'suite';
+    let currentItems = [];
+    let worldDebounce = null;
+
+    function showToast(html, ttl = 4000) {
+      toast.innerHTML = html;
+      toast.classList.remove('hidden');
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => toast.classList.add('hidden'), ttl);
+    }
+
+    function escapeHtml(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function renderItems(items, query = '') {
+      currentItems = items;
+      const q = query.trim().toLowerCase();
+      const filtered = q
+        ? items.filter(i =>
+            (i.name || '').toLowerCase().includes(q)
+            || (i.comment || '').toLowerCase().includes(q))
+        : items;
+
+      meta.textContent = `${filtered.length} ${currentTab}`;
+
+      if (!filtered.length) {
+        grid.innerHTML = `<div class="empty">${q ? 'Nothing matches.' : 'Nothing here yet.'}</div>`;
+        return;
+      }
+
+      grid.innerHTML = filtered.map((it, i) => `
+        <button class="tile" data-i="${i}">
+          <div class="src">${escapeHtml(it.source)}</div>
+          <div class="name">${escapeHtml(it.name || it.id || 'Untitled')}</div>
+          ${it.comment ? `<div class="comment">${escapeHtml(it.comment)}</div>` : ''}
+          ${it.install_cmd ? `<div class="install">${escapeHtml(it.install_cmd)}</div>` : ''}
+        </button>
+      `).join('');
+
+      grid.querySelectorAll('.tile').forEach(el => {
+        el.addEventListener('click', async () => {
+          const idx  = parseInt(el.dataset.i, 10);
+          const spec = filtered[idx];
+          const r = await fetch('/api/launch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(spec),
+          });
+          const d = await r.json().catch(() => ({}));
+          if (d.ok) {
+            // Clean launch — toast briefly so the user knows it took.
+            showToast(`Launching ${escapeHtml(spec.name || spec.id)}.`, 1500);
+          } else if (d.command) {
+            showToast(`Run this in a terminal:<pre>${escapeHtml(d.command)}</pre>`, 8000);
+          } else {
+            showToast(`Couldn't launch: ${escapeHtml(d.detail || 'unknown error')}`);
+          }
+        });
+      });
+    }
+
+    async function loadTab(tab) {
+      currentTab = tab;
+      tabs.forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+      grid.innerHTML = '<div class="loading">Loading…</div>';
+      meta.textContent = '';
+
+      if (tab === 'world') {
+        const q = search.value.trim();
+        if (!q) {
+          grid.innerHTML = '<div class="empty">Type a search term to browse the open-source world.</div>';
+          meta.textContent = 'world · local AppStream cache · no network';
+          return;
+        }
+        const r = await fetch('/api/world?q=' + encodeURIComponent(q));
+        const items = await r.json();
+        renderItems(items, '');
+        return;
+      }
+
+      const r = await fetch('/api/' + tab);
+      const items = await r.json();
+      renderItems(items, search.value);
+    }
+
+    // Tab clicks
+    tabs.forEach(t => t.addEventListener('click', () => loadTab(t.dataset.tab)));
+
+    // Search: Suite/Mine filter the loaded items locally.
+    // World re-queries the AppStream backend on a 250ms debounce.
+    search.addEventListener('input', () => {
+      if (currentTab === 'world') {
+        clearTimeout(worldDebounce);
+        worldDebounce = setTimeout(() => loadTab('world'), 250);
+      } else {
+        renderItems(currentItems, search.value);
+      }
+    });
+
+    loadTab('suite');
+  </script>
+</body>
+</html>

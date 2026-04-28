@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Scatter Catalog
+GenericName=All apps
+Comment=Suite, your work, and the open-source world. One surface.
+Exec=/home/ryannlynnmurphy/.local/bin/scatter-app catalog 3070 /home/ryannlynnmurphy/scatter-system/scatter-catalog "python3 server.py"
+Icon=/home/ryannlynnmurphy/scatter-system/scatter-bar/icons/all-apps.png
+Terminal=false
+Categories=Utility;
+StartupNotify=true
+StartupWMClass=Scatter-Catalog
