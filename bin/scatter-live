@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Scatter wrapper — Linux Show Player (GPL), theatrical cue playback.
+
+set -euo pipefail
+
+SCATTER_CORE="/home/ryannlynnmurphy/scatter-system/scatter_core.py"
+
+python3 "$SCATTER_CORE" - <<'PYJOURNAL' 2>/dev/null || true
+import scatter_core as sc
+sc.journal_append(
+    "commons_launch",
+    slug="linux-show-player",
+    provenance="Linux Show Player — François Nicolas",
+    profile=sc.profile(),
+)
+PYJOURNAL
+
+BIN=""
+for cand in linux-show-player lsp; do
+  if command -v "$cand" >/dev/null 2>&1; then
+    BIN="$cand"
+    break
+  fi
+done
+
+if [ -z "$BIN" ]; then
+  echo "Scatter: linux-show-player not found. Install your distro package (e.g. linux-show-player)." >&2
+  exit 1
+fi
+
+if command -v firejail >/dev/null 2>&1; then
+  exec firejail "$BIN" "$@"
+fi
+
+exec "$BIN" "$@"

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Scatter wrapper — Carla plugin host / patchbay.
+
+set -euo pipefail
+
+SCATTER_CORE="/home/ryannlynnmurphy/scatter-system/scatter_core.py"
+
+python3 "$SCATTER_CORE" - <<'PYJOURNAL' 2>/dev/null || true
+import scatter_core as sc
+sc.journal_append(
+    "commons_launch",
+    slug="carla",
+    provenance="Carla — falkTX",
+    profile=sc.profile(),
+)
+PYJOURNAL
+
+if command -v firejail >/dev/null 2>&1; then
+  exec firejail carla "$@"
+fi
+
+exec carla "$@"

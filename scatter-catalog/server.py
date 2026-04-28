@@ -1,8 +1,8 @@
 """Scatter Catalog — the warehouse behind the apps reveal.
 
 Three sources, one surface:
-  Suite — the seven Scatter native apps (read from ~/.local/share/applications/
-          scatter-*.desktop)
+  Suite — Scatter suite apps (read from ~/.local/share/applications/
+          scatter-*.desktop for known slugs)
   Mine  — Ryann's own work, auto-detected from ~/projects, ~/HZL-Academy-,
           and ~/scatter-system itself. A repo qualifies if it has a
           package.json with a "scatter" field, OR a shipped .desktop file
@@ -38,7 +38,18 @@ PROJECTS_ROOTS = [
 
 
 # ── Suite — read .desktop files ────────────────────────────────────────
-SUITE_SLUGS = ["schools", "studio", "music", "write", "draft", "film", "stream"]
+# Order: home first (laptop forward surface), then catalog (warehouse).
+SUITE_SLUGS = [
+    "home",
+    "catalog",
+    "schools",
+    "studio",
+    "music",
+    "write",
+    "draft",
+    "film",
+    "stream",
+]
 
 
 def parse_desktop(path: Path) -> dict | None:

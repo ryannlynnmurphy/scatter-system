@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Scatter wrapper — LMMS electronic music workstation (GPL).
+
+set -euo pipefail
+
+SCATTER_CORE="/home/ryannlynnmurphy/scatter-system/scatter_core.py"
+
+python3 "$SCATTER_CORE" - <<'PYJOURNAL' 2>/dev/null || true
+import scatter_core as sc
+sc.journal_append(
+    "commons_launch",
+    slug="lmms",
+    provenance="LMMS — LMMS team",
+    profile=sc.profile(),
+)
+PYJOURNAL
+
+if command -v firejail >/dev/null 2>&1; then
+  exec firejail lmms "$@"
+fi
+
+exec lmms "$@"

@@ -95,14 +95,13 @@ function _writePins(pins) {
     }
 }
 
-// Scatter suite — the seven native surfaces. Default reveal shows only
-// these; everything else (system tools, FOSS, etc.) lives in Catalog
-// behind the ⊕ tile. The user's apps surface is Scatter; the world is
-// reachable but never the default. Per project_scatter_one_canvas.
+// Scatter suite — native surfaces + Home as forward dashboard.
+// Everything else (system tools, FOSS, etc.) also reaches Catalog behind ⊕.
 //
 // Each entry's exec resolves a .desktop in ~/.local/share/applications/
 // via gtk-launch — keeps args/icons/wm-class in one source of truth.
 const SUITE_APPS = [
+    { label: 'Home', story: 'forward laptop surface — your suite grid.', exec: 'gtk-launch scatter-home.desktop', glyph: '⌂', brand: 'home', icon_path: _icon('home') },
     { label: 'Schools', story: 'adaptive lessons, voiced by Scatter.',           exec: 'gtk-launch scatter-schools.desktop', glyph: '>-<', brand: 'schools', icon_path: _icon('schools') },
     { label: 'Studio',  story: 'build things by talking. the brain.',            exec: 'gtk-launch scatter-studio.desktop',  glyph: '>-<', brand: 'studio',  icon_path: _icon('studio') },
     { label: 'Music',   story: 'a daw built for writers, not producers.',        exec: 'gtk-launch scatter-music.desktop',   glyph: '>-<', brand: 'music',   icon_path: _icon('music') },
@@ -118,6 +117,7 @@ const SUITE_BY_SLUG = Object.fromEntries(SUITE_APPS.map(a => [a.label.toLowerCas
 
 // Control tiles — the corner column. Persistent affordances independent
 // of which apps Ryann has used recently.
+const HOME_TILE     = { label: 'Home',     story: 'Scatter Home — suite grid, one tap.', exec: 'gtk-launch scatter-home.desktop', glyph: '⌂', brand: 'home', icon_path: _icon('home') };
 const CHAT_TILE     = { label: 'Chat',     story: 'past conversations with scatter.', exec: '__history',  glyph: '···', brand: 'history',  icon_path: _icon('history') };
 const SETTINGS_TILE = { label: 'Settings', story: 'system settings.',                 exec: '__settings', glyph: '@',   brand: 'settings', icon_path: _icon('gear') };
 const CATALOG_TILE  = { label: 'More',     story: 'every app: yours, scatter\'s, and the open-source world.', exec: '__catalog',  glyph: '+',   brand: 'catalog',  icon_path: _icon('all-apps') };
@@ -205,8 +205,8 @@ function _readChats() {
 
 // Compose reveal sections. Three columns, each rendered bottom-up:
 //   recents : last 5 unique apps launched via ~/.local/bin/scatter-app
-//   suite   : the seven Scatter surfaces — the canonical app set
-//   controls: chat, settings, more (catalog)
+//   suite   : (reserved — empty; suite lives in Catalog + Home surface)
+//   controls: home, chat, settings, more (catalog)
 // Pins are kept (back-compat with anyone who already added pins) and
 // joined into the suite column so they don't disappear.
 function _buildApps() {
@@ -228,7 +228,7 @@ function _buildApps() {
     return {
         recents:  [...recents, ...pins],
         suite:    [],
-        controls: [CHAT_TILE, SETTINGS_TILE, CATALOG_TILE],
+        controls: [HOME_TILE, CHAT_TILE, SETTINGS_TILE, CATALOG_TILE],
     };
 }
 
@@ -288,6 +288,12 @@ const ACTION_MAP = {
     'rain':         'flatpak run com.rafaelmardojai.Blanket',
     'ambient':      'flatpak run com.rafaelmardojai.Blanket',
     'blanket':      'flatpak run com.rafaelmardojai.Blanket',
+    // Scatter-native surfaces — longer phrases first.
+    'scatter home':        'gtk-launch scatter-home.desktop',
+    'scatter catalog':     'gtk-launch scatter-catalog.desktop',
+    'catalog':             'gtk-launch scatter-catalog.desktop',
+    'suite':               'gtk-launch scatter-catalog.desktop',
+    'future':              'gtk-launch scatter-home.desktop',
     // Scatter-native + dev — kept last so longer matches above win first.
     'scatter code': 'gnome-terminal -- bash -lc "cd ~/scatter-system && exec bash"',
     'claude':       'gnome-terminal -- bash -lc "claude || bash"',

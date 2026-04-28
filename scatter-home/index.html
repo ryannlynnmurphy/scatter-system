@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scatter Home</title>
+  <link rel="stylesheet" href="/tokens.css">
+  <style>
+    :root {
+      --scatter-future: #4ade80;
+      --scatter-future-dim: rgba(74, 222, 128, 0.14);
+      --scatter-future-glow: rgba(74, 222, 128, 0.42);
+    }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      background: var(--scatter-black);
+      color: var(--scatter-body);
+      font-family: var(--scatter-body-font);
+      min-height: 100vh;
+    }
+    .shell {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: var(--scatter-s-7) var(--scatter-s-6);
+      box-sizing: border-box;
+    }
+    .hero {
+      margin-bottom: var(--scatter-s-6);
+      padding-bottom: var(--scatter-s-5);
+      border-bottom: var(--scatter-border);
+    }
+    .hero .future {
+      font: 500 var(--scatter-type-xs) / 1 var(--scatter-mono);
+      letter-spacing: var(--scatter-track-wide);
+      text-transform: uppercase;
+      color: var(--scatter-future);
+      text-shadow: 0 0 20px var(--scatter-future-glow);
+      margin-bottom: var(--scatter-s-3);
+    }
+    .hero h1 {
+      font: 500 var(--scatter-type-xl) / 1.1 var(--scatter-display);
+      color: var(--scatter-bright);
+      letter-spacing: var(--scatter-track-tight);
+      margin: 0 0 var(--scatter-s-2);
+    }
+    .hero .when {
+      font: 400 var(--scatter-type-md) / 1.5 var(--scatter-mono);
+      color: var(--scatter-quiet);
+      margin: 0 0 var(--scatter-s-2);
+    }
+    .hero .tag {
+      font: 400 var(--scatter-type-sm) / 1.6 var(--scatter-body-font);
+      color: var(--scatter-body);
+      max-width: 42rem;
+      margin: 0;
+    }
+    .grid-label {
+      font: 500 var(--scatter-type-xs) / 1 var(--scatter-mono);
+      letter-spacing: var(--scatter-track-caps);
+      text-transform: uppercase;
+      color: var(--scatter-quiet);
+      margin-bottom: var(--scatter-s-4);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: var(--scatter-s-3);
+      flex: 1;
+    }
+    .tile {
+      background: var(--scatter-graphite);
+      border: var(--scatter-border);
+      padding: var(--scatter-s-5);
+      cursor: pointer;
+      text-align: left;
+      color: inherit;
+      font: inherit;
+      transition: border-color var(--scatter-dur-base) var(--scatter-ease);
+      border-radius: var(--scatter-radius-soft);
+    }
+    .tile:hover { border: var(--scatter-border-hover); }
+    .tile:focus { border: var(--scatter-border-focus); outline: none; }
+    .tile .src {
+      font-size: var(--scatter-type-xs);
+      color: var(--scatter-future);
+      letter-spacing: var(--scatter-track-caps);
+      text-transform: uppercase;
+      margin-bottom: var(--scatter-s-2);
+    }
+    .tile .name {
+      font: 500 var(--scatter-type-md) / 1.25 var(--scatter-display);
+      color: var(--scatter-bright);
+      margin-bottom: var(--scatter-s-1);
+    }
+    .tile .comment {
+      font-size: var(--scatter-type-sm);
+      color: var(--scatter-body);
+      line-height: 1.45;
+      margin-top: var(--scatter-s-2);
+    }
+    .empty, .loading {
+      padding: var(--scatter-s-7);
+      text-align: center;
+      color: var(--scatter-quiet);
+      border: 1px dashed var(--scatter-slate);
+    }
+    footer {
+      margin-top: var(--scatter-s-7);
+      padding-top: var(--scatter-s-5);
+      border-top: var(--scatter-border);
+      font: 400 var(--scatter-type-xs) / 1.5 var(--scatter-mono);
+      color: var(--scatter-quiet);
+    }
+    .toast {
+      position: fixed;
+      bottom: var(--scatter-s-6);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--scatter-ink);
+      border: 1px solid var(--scatter-amber);
+      color: var(--scatter-bright);
+      padding: var(--scatter-s-3) var(--scatter-s-5);
+      font-size: var(--scatter-type-sm);
+      max-width: 560px;
+      z-index: 100;
+      opacity: 1;
+      transition: opacity var(--scatter-dur-base) var(--scatter-ease);
+    }
+    .toast.hidden { opacity: 0; pointer-events: none; }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="hero">
+      <div class="future">Forward session</div>
+      <h1>Scatter Home</h1>
+      <p class="when" id="clock">&nbsp;</p>
+      <p class="tag">Local-first, yours. This laptop is the studio — apps below open in their own window. Catalog stays one click away in the grid.</p>
+    </header>
+
+    <div class="grid-label">Suite</div>
+    <main id="grid" class="grid"><div class="loading">Loading suite…</div></main>
+
+    <footer>
+      Scatter Home · port 3080 · same launch plumbing as Catalog · no cloud required for this screen
+    </footer>
+  </div>
+  <div class="toast hidden" id="toast"></div>
+
+  <script>
+(function () {
+  const grid = document.getElementById('grid');
+  const toast = document.getElementById('toast');
+  const clock = document.getElementById('clock');
+
+  function tick() {
+    const now = new Date();
+    clock.textContent = now.toLocaleString(undefined, {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+      hour: 'numeric', minute: '2-digit', second: '2-digit'
+    });
+  }
+  tick();
+  setInterval(tick, 1000);
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function showToast(msg, ms) {
+    toast.textContent = msg;
+    toast.classList.remove('hidden');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => toast.classList.add('hidden'), ms || 2800);
+  }
+
+  async function load() {
+    let items = [];
+    try {
+      const r = await fetch('/api/suite');
+      items = await r.json();
+    } catch (e) {
+      grid.innerHTML = '<div class="empty">Could not load suite.</div>';
+      return;
+    }
+    if (!items.length) {
+      grid.innerHTML = '<div class="empty">No suite tiles yet — check ~/.local/share/applications/scatter-*.desktop</div>';
+      return;
+    }
+
+    grid.innerHTML = items.map((it, i) => `
+      <button type="button" class="tile" data-i="${i}">
+        <div class="src">${escapeHtml(it.source)}</div>
+        <div class="name">${escapeHtml(it.name || it.slug)}</div>
+        ${it.comment ? `<div class="comment">${escapeHtml(it.comment)}</div>` : ''}
+      </button>
+    `).join('');
+
+    grid.querySelectorAll('.tile').forEach((el) => {
+      el.addEventListener('click', async () => {
+        const idx = parseInt(el.dataset.i, 10);
+        const spec = items[idx];
+        const r = await fetch('/api/launch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ source: 'suite', slug: spec.slug }),
+        });
+        const d = await r.json().catch(() => ({}));
+        if (d.ok) showToast('Launching ' + (spec.name || spec.slug) + '…', 2000);
+        else showToast(d.detail || 'Launch failed', 4000);
+      });
+    });
+  }
+
+  load();
+})();
+  </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Scatter Home
+GenericName=Home
+Comment=Forward laptop surface — launch the whole Scatter suite from one screen.
+Exec=/home/ryannlynnmurphy/.local/bin/scatter-app home 3080 /home/ryannlynnmurphy/scatter-system/scatter-home "python3 server.py"
+Icon=/home/ryannlynnmurphy/scatter-system/scatter-bar/icons/bowtie.png
+Terminal=false
+Categories=Utility;
+StartupNotify=true
+StartupWMClass=Scatter-Home

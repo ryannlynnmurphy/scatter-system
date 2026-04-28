@@ -194,6 +194,10 @@ print(', '.join(m['name'] for m in d.get('models',[])) or 'none')
         echo "  Done. Run: scatter status"
         echo ""
         ;;
+    home)
+        if gtk-launch scatter-home.desktop 2>/dev/null; then exit 0; fi
+        exec "$HOME/.local/bin/scatter-app" home 3080 "$SCATTER_HOME/scatter-home" "python3 server.py"
+        ;;
     "")
         # No args — launch the native Scatter app (GTK window hosting the GUI).
         exec python3 "$SCATTER_HOME/scatter/launcher.py"
@@ -208,6 +212,7 @@ print(', '.join(m['name'] for m in d.get('models',[])) or 'none')
         echo "  Scatter — local-first AI computing"
         echo ""
         echo "  scatter                    Open Scatter (build anything you can describe)"
+        echo "  scatter home               Scatter Home — suite dashboard (gtk-launch)"
         echo "  scatter code               Terminal coding agent"
         echo "  scatter status             System status"
         echo "  scatter setup              Check installation"

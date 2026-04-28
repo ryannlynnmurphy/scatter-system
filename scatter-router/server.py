@@ -270,10 +270,22 @@ class Msg(BaseModel):
     prefer_local: bool = False
 
 LAUNCH_VERB = re.compile(r"\b(open|launch|start|run|show|fire up|pull up|bring up)\b", re.I)
+# Longer phrases first — `_launch_target` sorts by key length descending.
 LAUNCH_TARGETS = {
-    "firefox": "firefox", "browser": "firefox", "web": "firefox",
-    "files": "nautilus", "file manager": "nautilus", "finder": "nautilus",
-    "terminal": "gnome-terminal", "shell": "gnome-terminal", "console": "gnome-terminal",
+    "scatter catalog": "gtk-launch scatter-catalog.desktop",
+    "scatter home": "gtk-launch scatter-home.desktop",
+    "firefox": "firefox",
+    "browser": "firefox",
+    "web": "firefox",
+    "files": "nautilus",
+    "file manager": "nautilus",
+    "finder": "nautilus",
+    "terminal": "gnome-terminal",
+    "shell": "gnome-terminal",
+    "console": "gnome-terminal",
+    "catalog": "gtk-launch scatter-catalog.desktop",
+    "suite": "gtk-launch scatter-catalog.desktop",
+    "future": "gtk-launch scatter-home.desktop",
 }
 SYSQ = re.compile(r"\b(disk|memory|battery|processes|uptime|wifi)\b", re.I)
 # Retrieval verbs — "what did we talk about," "show me our chat," "remind

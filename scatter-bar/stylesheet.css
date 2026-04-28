@@ -469,6 +469,13 @@
 
 /* ── Suite orbs — per-app rings matching the pixel-art icon primary ── */
 
+/* Home — mint horizon. Forward laptop shell (Scatter Home). */
+.scatter-orb-home           { border-color: rgba(134, 239, 172, 0.38); }
+.scatter-orb-home:hover     { border-color: rgba(134, 239, 172, 0.90);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55),
+                0 0 0 2px rgba(134, 239, 172, 0.42); }
+.scatter-orb-home .scatter-reveal-glyph { color: #86efac; }
+
 /* Schools — paper-white. Lessons live on pages. */
 .scatter-orb-schools         { border-color: rgba(245, 242, 234, 0.30); }
 .scatter-orb-schools:hover   { border-color: rgba(245, 242, 234, 0.85);
